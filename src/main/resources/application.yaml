@@ -38,6 +38,9 @@ spring:
     auto: true
     proxy-target-class: true
 
+  kafka:
+    bootstrap-servers: localhost:9092
+
 logging:
   level:
     org.springframework.r2dbc: DEBUG
@@ -45,5 +48,4 @@ logging:
     by.losik.imageservice: DEBUG
 
 server:
-  port: 8083
-
+  port: 8082
