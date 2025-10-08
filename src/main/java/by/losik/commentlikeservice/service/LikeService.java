@@ -1,6 +1,8 @@
 package by.losik.commentlikeservice.service;
 
 import by.losik.commentlikeservice.annotation.Loggable;
+import by.losik.commentlikeservice.annotation.PublishActivityEvent;
+import by.losik.commentlikeservice.entity.ActivityEventType;
 import by.losik.commentlikeservice.entity.Like;
 import by.losik.commentlikeservice.repository.LikeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,12 +39,14 @@ public class LikeService {
                 .hasElement();
     }
 
+    @PublishActivityEvent(type = ActivityEventType.ADD_LIKE)
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     @CacheEvict(value = {"likes", "stats"}, allEntries = true)
     public Mono<Like> toggleLike(Long userId, Long imageId) {
         return findByUserIdAndImageId(userId, imageId)
                 .flatMap(existingLike ->
                         likeRepository.delete(existingLike)
-                                .then(Mono.<Like>empty())
+                                .then(Mono.just(existingLike))
                 )
                 .switchIfEmpty(Mono.defer(() -> {
                     Like newLike = new Like();
@@ -60,16 +64,16 @@ public class LikeService {
     public Mono<Like> findById(Long id) {
         return likeRepository.findById(id);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.ADD_LIKE)
     public Mono<Like> save(@NonNull Like like) {
         like.setCreatedAt(LocalDateTime.now());
         return likeRepository.save(like);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     public Mono<Void> deleteById(Long id) {
         return likeRepository.deleteById(id);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     public Mono<Void> deleteByUserIdAndImageId(Long userId, Long imageId) {
         return likeRepository.deleteByUserIdAndImageId(userId, imageId);
     }
@@ -85,11 +89,11 @@ public class LikeService {
     public Mono<Long> countByUserId(Long userId) {
         return likeRepository.countByUserId(userId);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     public Mono<Void> deleteByImageId(Long imageId) {
         return likeRepository.deleteByImageId(imageId);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     public Mono<Void> deleteByUserId(Long userId) {
         return likeRepository.deleteByUserId(userId);
     }
