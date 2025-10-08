@@ -26,6 +26,7 @@ public class RedisConfig {
     private int redisDatabase;
 
     @Bean
+    @Primary
     public ReactiveRedisConnectionFactory reactiveRedisConnectionFactory() {
         LettuceConnectionFactory factory = new LettuceConnectionFactory(redisHost, redisPort);
         factory.setDatabase(redisDatabase);
@@ -53,3 +54,4 @@ public class RedisConfig {
     }
 
 }
+
