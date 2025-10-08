@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-1
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_images_insrt (varchar(500), varchar(500), date, bigint) AS
+              INSERT INTO gallery.images (url, description, uploadedat, user_id)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT DO NOTHING
+
+  - changeSet:
+      id: 004-2
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE user_schema_users_insrt (varchar(20), varchar(50), varchar(20), varchar, varchar(20)) AS
+              INSERT INTO user_schema.users (username, email, password, salt, user_role)
+              VALUES ($1, $2, $3, $4, $5)
+              ON CONFLICT DO NOTHING
+
+  - changeSet:
+      id: 004-3
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_comments_insrt (text, bigint, bigint) AS
+              INSERT INTO gallery.comments (content, user_id, image_id)
+              VALUES ($1, $2, $3)
+              ON CONFLICT DO NOTHING
+
+  - changeSet:
+      id: 004-4
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_likes_insrt (bigint, bigint) AS
+              INSERT INTO gallery.likes (user_id, image_id)
+              VALUES ($1, $2)
+              ON CONFLICT DO NOTHING
+
+  - changeSet:
+      id: 004-5
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_likes_delete (bigint, bigint) AS
+              DELETE FROM gallery.likes
+              WHERE user_id = $1 AND image_id = $2
+
+  - changeSet:
+      id: 004-6
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_comments_by_image AS
+              SELECT c.*, u.username 
+              FROM gallery.comments c
+              JOIN user_schema.users u ON c.user_id = u.id
+              WHERE c.image_id = $1
+              ORDER BY c.created_at DESC
+
+  - changeSet:
+      id: 004-7
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE gallery_likes_count AS
+              SELECT COUNT(*) as like_count
+              FROM gallery.likes
+              WHERE image_id = $1
