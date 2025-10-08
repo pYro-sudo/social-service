@@ -1,6 +1,8 @@
 package by.losik.commentlikeservice.service;
 
 import by.losik.commentlikeservice.annotation.Loggable;
+import by.losik.commentlikeservice.annotation.PublishActivityEvent;
+import by.losik.commentlikeservice.entity.ActivityEventType;
 import by.losik.commentlikeservice.entity.Comment;
 import by.losik.commentlikeservice.repository.CommentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,7 @@ public class CommentService {
         return commentRepository.countByImageId(imageId);
     }
 
+    @PublishActivityEvent(type = ActivityEventType.CREATE_COMMENT)
     @CacheEvict(value = {"comments", "stats"}, allEntries = true)
     public Mono<Comment> save(Comment comment) {
         comment.setCreatedAt(LocalDateTime.now());
@@ -51,6 +54,7 @@ public class CommentService {
         return commentRepository.findAll();
     }
 
+    @PublishActivityEvent(type = ActivityEventType.CREATE_COMMENT)
     public Mono<Comment> createComment(Long userId, Long imageId, String content) {
         return Mono.just(new Comment())
                 .flatMap(comment -> {
@@ -62,6 +66,7 @@ public class CommentService {
                 });
     }
 
+    @PublishActivityEvent(type = ActivityEventType.CREATE_COMMENT)
     public Mono<Comment> update(Long id, @NonNull Comment comment) {
         comment.setId(id);
         return commentRepository.save(comment);
@@ -71,7 +76,7 @@ public class CommentService {
         return commentRepository.updateContent(id, content)
                 .map(count -> count > 0);
     }
-
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_COMMENT)
     public Mono<Void> deleteById(Long id) {
         return commentRepository.deleteById(id);
     }
@@ -88,14 +93,17 @@ public class CommentService {
         return commentRepository.countByUserId(userId);
     }
 
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_COMMENT)
     public Mono<Void> deleteByImageId(Long imageId) {
         return commentRepository.deleteByImageId(imageId);
     }
 
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_COMMENT)
     public Mono<Void> deleteByUserId(Long userId) {
         return commentRepository.deleteByUserId(userId);
     }
 
+    @PublishActivityEvent(type = ActivityEventType.REMOVE_COMMENT)
     public Mono<Void> deleteByUserIdAndImageId(Long userId, Long imageId) {
         return commentRepository.deleteByUserIdAndImageId(userId, imageId);
     }
@@ -126,9 +134,4 @@ public class CommentService {
                 .take(limit);
     }
 
-    public Mono<Boolean> existsByIdAndImageId(Long commentId, Long imageId) {
-        return commentRepository.findById(commentId)
-                .map(comment -> comment.getImageId().equals(imageId))
-                .defaultIfEmpty(false);
-    }
 }
