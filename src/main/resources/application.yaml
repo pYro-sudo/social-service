@@ -1,11 +1,11 @@
 spring:
   application:
-    name: comment-like-service
+    name: image-service
 
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/spring_microservice_course_db
-    username: postgres
-    password: postgres
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5432/spring_microservice_course_db}
+    username: ${SPRING_R2DBC_USERNAME:postgres}
+    password: ${SPRING_R2DBC_PASSWORD:postgres}
     pool:
       initial-size: 5
       max-size: 20
@@ -17,20 +17,19 @@ spring:
     default-schema: public
     user: ${spring.r2dbc.username}
     password: ${spring.r2dbc.password}
-    url: jdbc:postgresql://localhost:5432/spring_microservice_course_db
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/spring_microservice_course_db}
 
   data:
     r2dbc:
       repositories:
         enabled: true
     redis:
-      host: localhost
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: 6379
       password: ""
       database: 0
-
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_microservice_course_db
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/spring_microservice_course_db}
     username: ${spring.r2dbc.username}
     password: ${spring.r2dbc.password}
     driver-class-name: org.postgresql.Driver
@@ -43,8 +42,7 @@ logging:
   level:
     org.springframework.r2dbc: DEBUG
     liquibase: INFO
-    by.losik.commentlikeservice: DEBUG
-    software.amazon.awssdk: DEBUG
+    by.losik.imageservice: DEBUG
 
 server:
-  port: 8083
+  port: 8082
