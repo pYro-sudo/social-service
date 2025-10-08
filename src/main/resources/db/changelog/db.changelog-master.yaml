@@ -9,5 +9,3 @@ databaseChangeLog:
       file: db/changelog/changes/005-create-comments-table.yaml
   - include:
       file: db/changelog/changes/006-create-likes-table.yaml
-  - include:
-      file: db/changelog/changes/004-create-prepared-statements.yaml
