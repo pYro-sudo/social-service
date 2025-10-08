@@ -1,7 +1,8 @@
-FROM eclipse-temurin:21-jre-alpine as builder
+FROM eclipse-temurin:21-jdk-alpine as builder
 WORKDIR /app
 COPY target/*.jar app.jar
-RUN java -Djarmode=tools -jar app.jar extract
+RUN java -Djarmode=layertools -jar app.jar list
+RUN java -Djarmode=layertools -jar app.jar extract
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S spring && adduser -S spring -G spring
