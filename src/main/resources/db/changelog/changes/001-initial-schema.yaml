@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-1
+      author: losik
+      changes:
+        - sql:
+            sql: SET client_encoding = 'UTF-8'
+
+  - changeSet:
+      id: 001-2
+      author: losik
+      changes:
+        - sql:
+            sql: CREATE DATABASE spring_microservice_course_db
+            comment: Создание базы данных (может потребоваться выполнить отдельно)
+
+  - changeSet:
+      id: 001-3
+      author: losik
+      changes:
+        - sql:
+            sql: CREATE TABLESPACE spring_microservice_course_ts LOCATION '/'
+
+  - changeSet:
+      id: 001-4
+      author: losik
+      changes:
+        - createSchema:
+            schemaName: user_schema

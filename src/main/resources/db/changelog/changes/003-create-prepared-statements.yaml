@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-1
+      author: losik
+      changes:
+        - sql:
+            sql: >
+              PREPARE user_schema_users_insrt (varchar(20), varchar(50), varchar(20), varchar, varchar(20)) AS
+              INSERT INTO user_schema.users (username, email, password, salt, user_role)
+              VALUES ($1, $2, $3, $4, $5)
+              ON CONFLICT DO NOTHING
