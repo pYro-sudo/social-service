@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: comment-like-service
+
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/activity_db}
+      database: activity_db
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: activity-service-group
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    org.springframework.shell: INFO
+    by.losik.activityservice: DEBUG
+
+server:
+  port: 8082
