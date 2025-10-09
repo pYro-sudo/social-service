@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-2
+      author: losik
+      changes:
+        - sql:
+            sql: CREATE SCHEMA IF NOT EXISTS gallery
+            comment: Создание схемы gallery

@@ -1,0 +1,94 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-1
+      author: losik
+      changes:
+        - createTable:
+            schemaName: gallery
+            tableName: likes
+            columns:
+              - column:
+                  name: id
+                  type: serial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: image_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+#            tablespace: spring_microservice_course_ts
+
+#  - changeSet:
+#      id: 006-2
+#      author: losik
+#      changes:
+#        - addForeignKeyConstraint:
+#            baseTableSchemaName: gallery
+#            baseTableName: likes
+#            baseColumnNames: user_id
+#            referencedTableSchemaName: user_schema
+#            referencedTableName: users
+#            referencedColumnNames: id
+#            constraintName: fk_likes_user_id
+#            onDelete: CASCADE
+#
+#  - changeSet:
+#      id: 006-3
+#      author: losik
+#      changes:
+#        - addForeignKeyConstraint:
+#            baseTableSchemaName: gallery
+#            baseTableName: likes
+#            baseColumnNames: image_id
+#            referencedTableSchemaName: gallery
+#            referencedTableName: images
+#            referencedColumnNames: id
+#            constraintName: fk_likes_image_id
+#            onDelete: CASCADE
+
+  - changeSet:
+      id: 006-4
+      author: losik
+      changes:
+        - addUniqueConstraint:
+            schemaName: gallery
+            tableName: likes
+            columnNames: user_id, image_id
+            constraintName: uk_likes_user_image
+
+  - changeSet:
+      id: 006-5
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: gallery
+            tableName: likes
+            indexName: idx_likes_image_id
+            columns:
+              - column:
+                  name: image_id
+
+  - changeSet:
+      id: 006-6
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: gallery
+            tableName: likes
+            indexName: idx_likes_user_id
+            columns:
+              - column:
+                  name: user_id
