@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-3
+      author: losik
+      changes:
+        - sql:
+            sql: CREATE SCHEMA IF NOT EXISTS user_schema
+            comment: Создание схемы user_schema для таблицы users

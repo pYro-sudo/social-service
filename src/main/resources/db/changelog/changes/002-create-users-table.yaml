@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-1
+      author: losik
+      changes:
+        - createTable:
+            schemaName: user_schema
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: serial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: username
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: email
+                  type: varchar(50)
+                  defaultValue: ""
+                  constraints:
+                    nullable: false
+              - column:
+                  name: password
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_role
+                  type: varchar(20)
+                  defaultValue: "USER"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValue: false
+                  constraints:
+                    nullable: false
+#            tablespace: spring_microservice_course_ts
+
+  - changeSet:
+      id: 002-2
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: user_schema
+            tableName: users
+            indexName: idx_user_schema_users_id
+            columns:
+              - column:
+                  name: id
+  - changeSet:
+      id: 002-3
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: user_schema
+            tableName: users
+            indexName: idx_user_schema_users_username
+            columns:
+              - column:
+                  name: username
