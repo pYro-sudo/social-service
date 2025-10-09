@@ -5,18 +5,37 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.lang.annotation.Annotation;
 
 @Aspect
 @Component
 @Slf4j
 public class LoggingAspect {
 
-    @Around("@within(loggable)")
-    public Object logAnnotatedClass(@NonNull ProceedingJoinPoint joinPoint, @NonNull Loggable loggable) throws Throwable {
+    @Around("@within(by.losik.apigateway.annotation.Loggable)")
+    public Object logAnnotatedClass(ProceedingJoinPoint joinPoint) throws Throwable {
+        Class<?> targetClass = joinPoint.getTarget().getClass();
+        Loggable loggable = AnnotationUtils.findAnnotation(targetClass, Loggable.class);
+        return logMethodExecution(joinPoint, loggable);
+    }
+
+    @Around("@annotation(by.losik.apigateway.annotation.Loggable)")
+    public Object logAnnotatedMethod(ProceedingJoinPoint joinPoint) throws Throwable {
+        Loggable loggable = AnnotationUtils.getAnnotation((Annotation) joinPoint.getSignature(), Loggable.class);
+        return logMethodExecution(joinPoint, loggable);
+    }
+
+    private Object logMethodExecution(@NonNull ProceedingJoinPoint joinPoint, Loggable loggable) throws Throwable {
+        if (loggable == null) {
+            return joinPoint.proceed();
+        }
+
         String methodName = joinPoint.getSignature().getName();
         String className = joinPoint.getTarget().getClass().getSimpleName();
 
