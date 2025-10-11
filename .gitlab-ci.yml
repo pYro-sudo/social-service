@@ -1,6 +1,6 @@
 variables:
   SERVICE_NAME: "api-gateway"
-  DOCKER_IMAGE: "pyrodocker1/social-api-gateway"
+  DOCKER_IMAGE: "pyrodocker1/api-gateway"
   PORT: "8080"
 
 stages:
@@ -73,4 +73,5 @@ docker-publish:
   dependencies:
     - docker-build
   only:
+
     - main
