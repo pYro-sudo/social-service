@@ -1,0 +1,76 @@
+variables:
+  SERVICE_NAME: "activity-service"
+  DOCKER_IMAGE: "pyrodocker1/social-activity-service"
+  PORT: "8085"
+
+stages:
+  - build
+  - test
+  - sonarqube
+  - docker_build
+  - docker_publish
+
+build:
+  stage: build
+  image: maven:3.8.6-openjdk-17
+  cache:
+    paths:
+      - .m2/repository
+  script:
+    - mvn clean compile -DskipTests
+  artifacts:
+    paths:
+      - target/
+
+test:
+  stage: test
+  image: maven:3.8.6-openjdk-17
+  cache:
+    paths:
+      - .m2/repository
+  script:
+    - mvn test
+  dependencies:
+    - build
+
+sonarqube:
+  stage: sonarqube
+  image: maven:3.8.6-openjdk-17
+  script:
+    - mvn sonar:sonar -Dsonar.projectKey=social-$SERVICE_NAME -Dsonar.host.url=$SONAR_HOST_URL
+  dependencies:
+    - test
+  only:
+    - main
+    - develop
+
+docker-build:
+  stage: docker_build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker save $DOCKER_IMAGE:$CI_COMMIT_SHA > image.tar
+  artifacts:
+    paths:
+      - image.tar
+  dependencies:
+    - test
+
+docker-publish:
+  stage: docker_publish
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+  script:
+    - docker load < image.tar
+    - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
+    - docker push $DOCKER_IMAGE:latest
+  dependencies:
+    - docker-build
+  only:
+    - main
