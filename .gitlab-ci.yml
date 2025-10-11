@@ -1,6 +1,6 @@
 variables:
   SERVICE_NAME: "comment-like-service"
-  DOCKER_IMAGE: "pyrodocker1/social-comment-like-service"
+  DOCKER_IMAGE: "pyrodocker1/comment-like-service"
   PORT: "8083"
 
 stages:
@@ -73,4 +73,5 @@ docker-publish:
   dependencies:
     - docker-build
   only:
+
     - main
