@@ -1,0 +1,79 @@
+variables:
+  SERVICE_NAME: "photo-sharing-app"
+  DOCKER_IMAGE: "pyrodocker1/photo-sharing-app"
+  PORT: "5173"
+
+stages:
+  - dependencies
+  - test
+  - build
+  - docker_build
+  - docker_publish
+
+dependencies:
+  stage: dependencies
+  image: node:18-alpine
+  cache:
+    paths:
+      - node_modules/
+  script:
+    - npm ci
+  artifacts:
+    paths:
+      - node_modules/
+
+test:
+  stage: test
+  image: node:18-alpine
+  cache:
+    paths:
+      - node_modules/
+  script:
+    - npm test -- --watchAll=false
+  dependencies:
+    - dependencies
+
+build:
+  stage: build
+  image: node:18-alpine
+  cache:
+    paths:
+      - node_modules/
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+  dependencies:
+    - dependencies
+
+docker-build:
+  stage: docker_build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker save $DOCKER_IMAGE:$CI_COMMIT_SHA > image.tar
+  artifacts:
+    paths:
+      - image.tar
+  dependencies:
+    - build
+
+docker-publish:
+  stage: docker_publish
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+  script:
+    - docker load < image.tar
+    - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
+    - docker push $DOCKER_IMAGE:latest
+  dependencies:
+    - docker-build
+  only:
+    - main
