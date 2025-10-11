@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-db
+  labels:
+    name: social-network-db
+    type: database
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-users
+  labels:
+    name: social-network-users
+    type: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-images
+  labels:
+    name: social-network-images
+    type: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-comments
+  labels:
+    name: social-network-comments
+    type: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-activities
+  labels:
+    name: social-network-activities
+    type: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-network-gateway
+  labels:
+    name: social-network-gateway
+    type: gateway
