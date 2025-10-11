@@ -1,6 +1,6 @@
 variables:
   SERVICE_NAME: "image-service"
-  DOCKER_IMAGE: "pyrodocker1/social-image-service"
+  DOCKER_IMAGE: "pyrodocker1/image-service"
   PORT: "8082"
 
 stages:
@@ -73,4 +73,5 @@ docker-publish:
   dependencies:
     - docker-build
   only:
+
     - main
