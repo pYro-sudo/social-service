@@ -1,6 +1,6 @@
 variables:
   SERVICE_NAME: "activity-service"
-  DOCKER_IMAGE: "pyrodocker1/social-activity-service"
+  DOCKER_IMAGE: "pyrodocker1/activity-service"
   PORT: "8085"
 
 stages:
@@ -73,4 +73,5 @@ docker-publish:
   dependencies:
     - docker-build
   only:
+
     - main
