@@ -4,34 +4,43 @@ server:
 spring:
   application:
     name: api-gateway
+  data:
+    redis:
+      host: localhost
+      port: 6379
   cloud:
     gateway:
-      server:
-        webflux:
-          routes:
-            - id: auth
-              uri: http://localhost:8080
-              predicates:
-                - Path=/auth/**
+      routes:
+        - id: auth
+          uri: http://localhost:8080
+          predicates:
+            - Path=/auth/**
+          filters:
+            - name: RateLimiterGatewayFilter
 
-            - id: user-service
-              uri: http://localhost:8081
-              predicates:
-                - Path=/api/users/**
+        - id: user-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
 
-            - id: image-service
-              uri: http://localhost:8082
-              predicates:
-                - Path=/api/images/**
-              filters:
-                - name: JwtAuthGatewayFilter
+        - id: image-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/images/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
 
-            - id: comment-like-service
-              uri: http://localhost:8083
-              predicates:
-                - Path=/api/comments/**,/api/likes/**
-              filters:
-                - name: JwtAuthGatewayFilter
+        - id: comment-like-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/comments/**,/api/likes/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
 
   jwt:
     secret: "mySuperSecretKeyForJWTTokenGenerationAndValidationInSpringMicroserviceCourse2023"
@@ -39,6 +48,7 @@ spring:
 logging:
   level:
     org.springframework.cloud.gateway: DEBUG
+    by.losik.apigateway: DEBUG
 
 ---
 spring:
@@ -47,9 +57,11 @@ spring:
       on-profile: kubernetes
   cloud:
     gateway:
-      server:
-        webflux:
-          discovery:
-            locator:
-              enabled: true
-              lower-case-service-id: true
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+  data:
+    redis:
+      host: redis-service
+      port: 6379
