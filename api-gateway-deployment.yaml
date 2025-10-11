@@ -34,6 +34,8 @@ spec:
               value: "http://comment-like-service.social-network-comments:8083"
             - name: ACTIVITY_SERVICE_URL
               value: "http://activity-service.social-network-activities:8085"
+            - name: SPRING_DATA_REDIS_HOST
+              value: "redis.social-network-db"
           livenessProbe:
             httpGet:
               path: /actuator/health
@@ -58,4 +60,5 @@ spec:
     app: api-gateway
   ports:
     - port: 8080
+
       targetPort: 8080
