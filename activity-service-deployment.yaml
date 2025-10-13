@@ -48,6 +48,11 @@ kind: Service
 metadata:
   name: activity-service
   namespace: social-network-activities
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8085"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
 spec:
   selector:
     app: activity-service
