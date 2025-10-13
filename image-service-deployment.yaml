@@ -72,6 +72,11 @@ kind: Service
 metadata:
   name: image-service
   namespace: social-network-images
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8082"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
 spec:
   selector:
     app: image-service
