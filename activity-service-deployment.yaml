@@ -13,6 +13,7 @@ spec:
       labels:
         app: activity-service
     spec:
+      serviceAccountName: activity-service-sa
       containers:
         - name: activity-service
           image: activity-service:latest
