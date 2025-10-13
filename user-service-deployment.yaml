@@ -60,6 +60,11 @@ kind: Service
 metadata:
   name: user-service
   namespace: social-network-users
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8081"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
 spec:
   selector:
     app: user-service
