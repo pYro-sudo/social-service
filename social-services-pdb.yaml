@@ -52,3 +52,14 @@ spec:
   selector:
     matchLabels:
       app: api-gateway
+---
+#apiVersion: policy/v1
+#kind: PodDisruptionBudget
+#metadata:
+#  name: frontend-pdb
+#  namespace: social-network-gateway
+#spec:
+#  minAvailable: 1
+#  selector:
+#    matchLabels:
+#      app: photo-sharing-frontend
