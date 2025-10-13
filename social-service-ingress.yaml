@@ -31,3 +31,31 @@ spec:
                 name: api-gateway
                 port:
                   number: 8080
+
+#spec:
+#  ingressClassName: nginx
+#  rules:
+#    - host: social-network.local
+#      http:
+#        paths:
+#          - path: /
+#            pathType: Prefix
+#            backend:
+#              service:
+#                name: photo-sharing-frontend
+#                port:
+#                  number: 3000
+#          - path: /api
+#            pathType: Prefix
+#            backend:
+#              service:
+#                name: api-gateway
+#                port:
+#                  number: 8080
+#          - path: /actuator
+#            pathType: Prefix
+#            backend:
+#              service:
+#                name: api-gateway
+#                port:
+#                  number: 8080
