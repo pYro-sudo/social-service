@@ -13,6 +13,7 @@ spec:
       labels:
         app: api-gateway
     spec:
+      serviceAccountName: api-gateway-sa
       containers:
         - name: api-gateway
           image: api-gateway:latest
@@ -66,4 +67,3 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
-
