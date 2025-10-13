@@ -7,6 +7,15 @@ const api = axios.create({
     withCredentials: true,
 });
 
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://social-network.local/api';
+
+// export const api = axios.create({
+//   baseURL: API_BASE_URL,
+//   headers: {
+//     'Content-Type': 'application/json',
+//   },
+// });
+
 export const imageAPI = {
     getAllImages: (page = 0, size = 12) => api.get(`/api/images?page=${page}&size=${size}`),
 
@@ -56,5 +65,6 @@ export const authAPI = {
 export const userAPI = {
     getProfile: () => api.get('/api/users/profile'),
 };
+
 
 export default api;
