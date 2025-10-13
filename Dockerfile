@@ -7,6 +7,9 @@ RUN npm ci
 
 COPY . .
 
+ARG VITE_API_BASE_URL=http://api-gateway.social-network-gateway:8080
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 RUN npm run build
 
 RUN npm install -g serve
