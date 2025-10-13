@@ -31,9 +31,15 @@ spec:
             - name: SPRING_DATA_REDIS_HOST
               value: "redis.social-network-db"
             - name: SPRING_R2DBC_USERNAME
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
             - name: SPRING_R2DBC_PASSWORD
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
             - name: SPRING_DATA_REDIS_PORT
               value: "6379"
           livenessProbe:
