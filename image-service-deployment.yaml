@@ -33,15 +33,27 @@ spec:
             - name: SPRING_CLOUD_AWS_S3_ENDPOINT
               value: "http://localstack.social-network-db:4566"
             - name: SPRING_R2DBC_USERNAME
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
             - name: SPRING_R2DBC_PASSWORD
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
             - name: SPRING_DATA_REDIS_PORT
               value: "6379"
             - name: SPRING_CLOUD_AWS_CREDENTIALS_ACCESS-KEY
-              value: "test"
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: access-key
             - name: SPRING_CLOUD_AWS_CREDENTIALS_SECRET-KEY
-              value: "test"
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secret-key
           livenessProbe:
             httpGet:
               path: /actuator/health
