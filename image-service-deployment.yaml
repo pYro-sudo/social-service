@@ -13,6 +13,7 @@ spec:
       labels:
         app: image-service
     spec:
+      serviceAccountName: image-service-sa
       containers:
         - name: image-service
           image: image-service:latest
