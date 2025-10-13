@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: social-network-users
+spec:
+  limits:
+    - default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "256Mi"
+        cpu: "100m"
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: social-network-images
+spec:
+  limits:
+    - default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "256Mi"
+        cpu: "100m"
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: social-network-comments
+spec:
+  limits:
+    - default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "256Mi"
+        cpu: "100m"
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: social-network-activities
+spec:
+  limits:
+    - default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "256Mi"
+        cpu: "100m"
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: social-network-gateway
+spec:
+  limits:
+    - default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "256Mi"
+        cpu: "100m"
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: db-limits
+  namespace: social-network-db
+spec:
+  limits:
+    - default:
+        memory: "1Gi"
+        cpu: "1000m"
+      defaultRequest:
+        memory: "512Mi"
+        cpu: "500m"
+      type: Container
