@@ -13,6 +13,7 @@ spec:
       labels:
         app: comment-like-service
     spec:
+      serviceAccountName: comment-like-service-sa
       containers:
         - name: comment-like-service
           image: comment-like-service:latest
