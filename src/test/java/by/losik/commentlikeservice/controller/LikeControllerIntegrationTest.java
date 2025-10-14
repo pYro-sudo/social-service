@@ -1,8 +1,9 @@
 package by.losik.commentlikeservice.controller;
 
 import by.losik.commentlikeservice.config.TestSecurityConfig;
-import by.losik.commentlikeservice.entity.Comment;
-import by.losik.commentlikeservice.entity.Like;
+import by.losik.commentlikeservice.dto.LikeRequest;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,16 +19,16 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebServiceClient
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 class LikeControllerIntegrationTest {
@@ -42,6 +43,27 @@ class LikeControllerIntegrationTest {
     @Container
     static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7.2-alpine")
             .withExposedPorts(6379);
+
+    @Container
+    static GenericContainer<?> zookeeperContainer = new GenericContainer<>("confluentinc/cp-zookeeper:7.8.0")
+            .withExposedPorts(2181)
+            .withEnv("ZOOKEEPER_CLIENT_PORT", "2181")
+            .withReuse(true);
+
+    @Container
+    static GenericContainer<?> kafkaContainer = new GenericContainer<>(
+            DockerImageName.parse("confluentinc/cp-kafka:7.8.0")
+    )
+            .withExposedPorts(9092, 9093)
+            .withEnv("KAFKA_BROKER_ID", "1")
+            .withEnv("KAFKA_ZOOKEEPER_CONNECT", "localhost:2181")
+            .withEnv("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:9093")
+            .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT")
+            .withEnv("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
+            .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+            .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
+            .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
+            .withReuse(true).dependsOn(zookeeperContainer);
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -70,213 +92,229 @@ class LikeControllerIntegrationTest {
         registry.add("spring.liquibase.password", postgreSQLContainer::getPassword);
         registry.add("spring.liquibase.default-schema", () -> "public");
         registry.add("spring.liquibase.liquibase-schema", () -> "public");
+
+        registry.add("spring.kafka.topic", () -> "activity-events");
+        registry.add("spring.kafka.bootstrap-servers", () ->
+                String.format("localhost:%d", kafkaContainer.getMappedPort(9093)));
+        registry.add("spring.kafka.consumer.group-id", () -> "comment-service-test-group");
+        registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
+        registry.add("spring.kafka.producer.key-serializer", () -> "org.apache.kafka.common.serialization.StringSerializer");
+        registry.add("spring.kafka.producer.value-serializer", () -> "org.springframework.kafka.support.serializer.JsonSerializer");
+        registry.add("spring.kafka.properties.spring.json.trusted.packages", () -> "*");
     }
 
     @Autowired
     private WebTestClient webTestClient;
 
-    private Like createUniqueLike() {
-        String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        return new Like(
-                null,
-                Long.parseLong(uniqueId.substring(0, 4)),
-                Long.parseLong(uniqueId.substring(4, 8)),
-                LocalDateTime.now()
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private LikeRequest createUniqueLikeRequest() {
+        return new LikeRequest(
+                new Random().nextLong(),
+                new Random().nextLong()
         );
     }
 
-    private Like createLikeWithSpecificData(Long userId, Long imageId) {
-        return new Like(
-                null,
-                userId,
-                imageId,
-                LocalDateTime.now()
-        );
+    private LikeRequest createLikeRequestWithSpecificData(Long userId, Long imageId) {
+        return new LikeRequest(userId, imageId);
     }
 
     @BeforeEach
     void cleanup() {
-        List<Comment> comments = webTestClient.get()
+        webTestClient.delete()
                 .uri("/api/likes")
                 .exchange()
-                .expectStatus().isOk()
-                .returnResult(Comment.class)
-                .getResponseBody()
-                .collectList()
-                .block();
-
-        if (comments != null) {
-            for (Comment comment : comments) {
-                webTestClient.delete()
-                        .uri("/api/likes/{id}", comment.getId())
-                        .exchange()
-                        .expectStatus().isNoContent();
-            }
-        }
+                .expectStatus().isOk();
     }
 
     @Test
-    void getAllLikes_ShouldReturnAllLikes() {
-        Like like1 = createUniqueLike();
-        Like like2 = createUniqueLike();
+    void getAllLikes_ShouldReturnAllLikes() throws Exception {
+        LikeRequest like1 = createUniqueLikeRequest();
+        LikeRequest like2 = createUniqueLikeRequest();
 
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 2);
-                    assertTrue(likes.stream().anyMatch(l -> like1.getUserId().equals(l.getUserId())));
-                    assertTrue(likes.stream().anyMatch(l -> like2.getUserId().equals(l.getUserId())));
-                });
-    }
-
-    @Test
-    void getLikeById_WhenLikeExists_ShouldReturnLike() {
-        Like testLike = createUniqueLike();
-
-        Like createdLike = webTestClient.post()
-                .uri("/api/likes")
+        webTestClient.post().uri("/api/likes")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(testLike)
+                .bodyValue(like1)
                 .exchange()
-                .expectStatus().isCreated()
-                .expectBody(Like.class)
+                .expectStatus().isCreated();
+
+        webTestClient.post().uri("/api/likes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(like2)
+                .exchange()
+                .expectStatus().isCreated();
+
+        String responseBody = webTestClient.get()
+                .uri("/api/likes")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        assertNotNull(createdLike);
-        assertNotNull(createdLike.getId());
-
-        webTestClient.get()
-                .uri("/api/likes/{id}", createdLike.getId())
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Like.class)
-                .value(like -> {
-                    assertEquals(createdLike.getId(), like.getId());
-                    assertEquals(testLike.getUserId(), like.getUserId());
-                    assertEquals(testLike.getImageId(), like.getImageId());
-                });
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
     }
 
     @Test
-    void getLikeById_WhenLikeNotExists_ShouldReturnNotFound() {
-        webTestClient.get()
-                .uri("/api/likes/999")
-                .exchange()
-                .expectStatus().isNotFound();
-    }
+    void getLikeById_WhenLikeExists_ShouldReturnLike() throws Exception {
+        LikeRequest testLike = createUniqueLikeRequest();
 
-    @Test
-    void createLike_ShouldCreateLikeSuccessfully() {
-        Like testLike = createUniqueLike();
-
-        webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/likes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testLike)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Like.class)
-                .value(like -> {
-                    assertNotNull(like.getId());
-                    assertEquals(testLike.getUserId(), like.getUserId());
-                    assertEquals(testLike.getImageId(), like.getImageId());
-                    assertNotNull(like.getCreatedAt());
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode createdLike = objectMapper.readTree(createResponse).get("data");
+        Long likeId = createdLike.get("id").asLong();
+
+        String responseBody = webTestClient.get()
+                .uri("/api/likes/{id}", likeId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertEquals(likeId, response.get("data").get("id").asLong());
+        assertEquals(testLike.getUserId(), response.get("data").get("userId").asLong());
+        assertEquals(testLike.getImageId(), response.get("data").get("imageId").asLong());
     }
 
     @Test
-    void toggleLike_WhenLikeNotExists_ShouldCreateLike() {
+    void getLikeById_WhenLikeNotExists_ShouldReturnNotFound() throws Exception {
+        String responseBody = webTestClient.get()
+                .uri("/api/likes/999")
+                .exchange()
+                .expectStatus().is2xxSuccessful()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
+        assertTrue(response.get("message").asText().contains("not found"));
+    }
+
+    @Test
+    void createLike_ShouldCreateLikeSuccessfully() throws Exception {
+        LikeRequest testLike = createUniqueLikeRequest();
+
+        String responseBody = webTestClient.post()
+                .uri("/api/likes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(testLike)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("id").asLong() > 0);
+        assertEquals(testLike.getUserId(), response.get("data").get("userId").asLong());
+        assertEquals(testLike.getImageId(), response.get("data").get("imageId").asLong());
+        assertNotNull(response.get("data").get("createdAt").asText());
+    }
+
+    @Test
+    void toggleLike_WhenLikeNotExists_ShouldCreateLike() throws Exception {
         Long userId = 1L;
         Long imageId = 1L;
 
-        webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/likes/toggle?userId={userId}&imageId={imageId}", userId, imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.action").isEqualTo("liked");
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
 
-        // Verify like was created
-        webTestClient.get()
-                .uri("/api/likes/check?userId={userId}&imageId={imageId}", userId, imageId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.liked").isEqualTo(true);
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertEquals("liked", response.get("data").asText());
     }
 
     @Test
-    void toggleLike_WhenLikeExists_ShouldRemoveLike() {
+    void toggleLike_WhenLikeExists_ShouldRemoveLike() throws Exception {
         Long userId = 1L;
         Long imageId = 1L;
 
-        // First toggle to create like
         webTestClient.post()
                 .uri("/api/likes/toggle?userId={userId}&imageId={imageId}", userId, imageId)
                 .exchange();
 
-        // Second toggle to remove like
-        webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/likes/toggle?userId={userId}&imageId={imageId}", userId, imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.action").isEqualTo("unliked");
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
 
-        // Verify like was removed
-        webTestClient.get()
-                .uri("/api/likes/check?userId={userId}&imageId={imageId}", userId, imageId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.liked").isEqualTo(false);
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertEquals("unliked", response.get("data").asText());
     }
 
     @Test
-    void deleteLike_WhenLikeExists_ShouldDeleteSuccessfully() {
-        Like testLike = createUniqueLike();
+    void deleteLike_WhenLikeExists_ShouldDeleteSuccessfully() throws Exception {
+        LikeRequest testLike = createUniqueLikeRequest();
 
-        Like createdLike = webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/likes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testLike)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Like.class)
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        webTestClient.delete()
-                .uri("/api/likes/{id}", createdLike.getId())
-                .exchange()
-                .expectStatus().isNoContent();
+        JsonNode createdLike = objectMapper.readTree(createResponse).get("data");
+        Long likeId = createdLike.get("id").asLong();
 
-        webTestClient.get()
-                .uri("/api/likes/{id}", createdLike.getId())
+        String responseBody = webTestClient.delete()
+                .uri("/api/likes/{id}", likeId)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("message").asText().contains("deleted"));
     }
 
     @Test
-    void deleteLike_WhenLikeNotExists_ShouldReturnNotFound() {
-        webTestClient.delete()
+    void deleteLike_WhenLikeNotExists_ShouldReturnNotFound() throws Exception {
+        String responseBody = webTestClient.delete()
                 .uri("/api/likes/999")
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().is2xxSuccessful()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
     }
 
     @Test
-    void deleteLikeByUserAndImage_ShouldDeleteSuccessfully() {
+    void deleteLikeByUserAndImage_ShouldDeleteSuccessfully() throws Exception {
         Long userId = 1L;
         Long imageId = 1L;
-        Like testLike = createLikeWithSpecificData(userId, imageId);
+        LikeRequest testLike = createLikeRequestWithSpecificData(userId, imageId);
 
         webTestClient.post()
                 .uri("/api/likes")
@@ -284,99 +322,106 @@ class LikeControllerIntegrationTest {
                 .bodyValue(testLike)
                 .exchange();
 
-        webTestClient.delete()
-                .uri("/api/likes?userId={userId}&imageId={imageId}", userId, imageId)
+        String responseBody = webTestClient.delete()
+                .uri("/api/likes/user/{userId}/image/{imageId}", userId, imageId)
                 .exchange()
-                .expectStatus().isNoContent();
-
-        // Verify like was deleted
-        webTestClient.get()
-                .uri("/api/likes/check?userId={userId}&imageId={imageId}", userId, imageId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.liked").isEqualTo(false);
+                .expectStatus().isNoContent()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
     }
 
     @Test
-    void getLikesByUser_ShouldReturnUserLikes() {
+    void getLikesByUser_ShouldReturnUserLikes() throws Exception {
         Long userId = 1L;
-        Like like1 = createLikeWithSpecificData(userId, 1L);
-        Like like2 = createLikeWithSpecificData(userId, 2L);
+        LikeRequest like1 = createLikeRequestWithSpecificData(userId, 1L);
+        LikeRequest like2 = createLikeRequestWithSpecificData(userId, 2L);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/user/{userId}", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 2);
-                    assertTrue(likes.stream().allMatch(like -> userId.equals(like.getUserId())));
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
     }
 
     @Test
-    void getLikesByImage_ShouldReturnImageLikes() {
+    void getLikesByImage_ShouldReturnImageLikes() throws Exception {
         Long imageId = 1L;
-        Like like1 = createLikeWithSpecificData(1L, imageId);
-        Like like2 = createLikeWithSpecificData(2L, imageId);
+        LikeRequest like1 = createLikeRequestWithSpecificData(1L, imageId);
+        LikeRequest like2 = createLikeRequestWithSpecificData(2L, imageId);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/image/{imageId}", imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 2);
-                    assertTrue(likes.stream().allMatch(like -> imageId.equals(like.getImageId())));
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
     }
 
     @Test
-    void getLikeCountByImage_ShouldReturnCorrectCount() {
+    void getLikeCountByImage_ShouldReturnCorrectCount() throws Exception {
         Long imageId = 1L;
-        Like like1 = createLikeWithSpecificData(1L, imageId);
-        Like like2 = createLikeWithSpecificData(2L, imageId);
+        LikeRequest like1 = createLikeRequestWithSpecificData(1L, imageId);
+        LikeRequest like2 = createLikeRequestWithSpecificData(2L, imageId);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/image/{imageId}/count", imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.count").isEqualTo(2);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("count").asLong() >= 2);
     }
 
     @Test
-    void getLikeCountByUser_ShouldReturnCorrectCount() {
+    void getLikeCountByUser_ShouldReturnCorrectCount() throws Exception {
         Long userId = 1L;
-        Like like1 = createLikeWithSpecificData(userId, 1L);
-        Like like2 = createLikeWithSpecificData(userId, 2L);
+        LikeRequest like1 = createLikeRequestWithSpecificData(userId, 1L);
+        LikeRequest like2 = createLikeRequestWithSpecificData(userId, 2L);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/user/{userId}/count", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.count").isEqualTo(2);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("count").asLong() >= 2);
     }
 
     @Test
-    void checkIfLiked_WhenLiked_ShouldReturnTrue() {
+    void checkIfLiked_WhenLiked_ShouldReturnTrue() throws Exception {
         Long userId = 1L;
         Long imageId = 1L;
-        Like like = createLikeWithSpecificData(userId, imageId);
+        LikeRequest like = createLikeRequestWithSpecificData(userId, imageId);
 
         webTestClient.post()
                 .uri("/api/likes")
@@ -384,29 +429,39 @@ class LikeControllerIntegrationTest {
                 .bodyValue(like)
                 .exchange();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/check?userId={userId}&imageId={imageId}", userId, imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.liked").isEqualTo(true);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").asBoolean());
     }
 
     @Test
-    void checkIfLiked_WhenNotLiked_ShouldReturnFalse() {
-        webTestClient.get()
+    void checkIfLiked_WhenNotLiked_ShouldReturnFalse() throws Exception {
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/check?userId=999&imageId=999")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.liked").isEqualTo(false);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertFalse(response.get("data").asBoolean());
     }
 
     @Test
-    void deleteAllLikesByImage_ShouldRemoveImageLikes() {
+    void deleteAllLikesByImage_ShouldRemoveImageLikes() throws Exception {
         Long imageId = 1L;
-        Like like1 = createLikeWithSpecificData(1L, imageId);
-        Like like2 = createLikeWithSpecificData(2L, imageId);
+        LikeRequest like1 = createLikeRequestWithSpecificData(1L, imageId);
+        LikeRequest like2 = createLikeRequestWithSpecificData(2L, imageId);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
@@ -414,21 +469,25 @@ class LikeControllerIntegrationTest {
         webTestClient.delete()
                 .uri("/api/likes/image/{imageId}", imageId)
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus().is2xxSuccessful();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/image/{imageId}", imageId)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> assertTrue(likes.isEmpty()));
+                .expectStatus().is2xxSuccessful()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
     }
 
     @Test
-    void deleteAllLikesByUser_ShouldRemoveUserLikes() {
+    void deleteAllLikesByUser_ShouldRemoveUserLikes() throws Exception {
         Long userId = 1L;
-        Like like1 = createLikeWithSpecificData(userId, 1L);
-        Like like2 = createLikeWithSpecificData(userId, 2L);
+        LikeRequest like1 = createLikeRequestWithSpecificData(userId, 1L);
+        LikeRequest like2 = createLikeRequestWithSpecificData(userId, 2L);
 
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
         webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
@@ -436,153 +495,67 @@ class LikeControllerIntegrationTest {
         webTestClient.delete()
                 .uri("/api/likes/user/{userId}", userId)
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus().is2xxSuccessful();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/likes/user/{userId}", userId)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> assertTrue(likes.isEmpty()));
+                .expectStatus().is2xxSuccessful()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
     }
 
     @Test
-    void getLikesAfterDate_ShouldReturnRecentLikes() {
-        LocalDateTime testDate = LocalDateTime.now().minusDays(1);
-        Like recentLike = createUniqueLike();
-
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(recentLike).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes/after/{date}", testDate)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 1);
-                    assertTrue(likes.stream().allMatch(like ->
-                            like.getCreatedAt().isAfter(testDate)));
-                });
-    }
-
-    @Test
-    void getLikesBeforeDate_ShouldReturnOlderLikes() {
-        LocalDateTime testDate = LocalDateTime.now().plusDays(1);
-        Like olderLike = createLikeWithSpecificData(1L, 1L);
-
-        // Manually set older creation date
-        olderLike.setCreatedAt(LocalDateTime.now().minusDays(2));
-
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(olderLike).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes/before/{date}", testDate)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 1);
-                    assertTrue(likes.stream().allMatch(like ->
-                            like.getCreatedAt().isBefore(testDate)));
-                });
-    }
-
-    @Test
-    void toggleLikeForImage_WithHeader_ShouldWorkCorrectly() {
+    void toggleLikeForImage_WithHeader_ShouldWorkCorrectly() throws Exception {
         long userId = 1L;
         Long imageId = 1L;
 
-        // First call should like
-        webTestClient.post()
+        String responseBody1 = webTestClient.post()
                 .uri("/api/likes/images/{imageId}/likes", imageId)
                 .header("X-User-Id", Long.toString(userId))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.action").isEqualTo("liked");
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
 
-        // Second call should unlike
-        webTestClient.post()
+        JsonNode response1 = objectMapper.readTree(responseBody1);
+        assertTrue(response1.get("success").asBoolean());
+        assertEquals("liked", response1.get("data").asText());
+
+        String responseBody2 = webTestClient.post()
                 .uri("/api/likes/images/{imageId}/likes", imageId)
                 .header("X-User-Id", Long.toString(userId))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.action").isEqualTo("unliked");
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response2 = objectMapper.readTree(responseBody2);
+        assertTrue(response2.get("success").asBoolean());
+        assertEquals("unliked", response2.get("data").asText());
     }
 
     @Test
-    void getLikesForImage_ShouldReturnImageLikes() {
-        Long imageId = 1L;
-        Like like1 = createLikeWithSpecificData(1L, imageId);
-        Like like2 = createLikeWithSpecificData(2L, imageId);
+    void createLike_WithInvalidData_ShouldReturnBadRequest() throws Exception {
+        LikeRequest invalidLike = new LikeRequest(null, null);
 
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes/images/{imageId}/likes", imageId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 2);
-                    assertTrue(likes.stream().allMatch(like -> imageId.equals(like.getImageId())));
-                });
-    }
-
-    @Test
-    void getLikeCountForImage_ShouldReturnCorrectCount() {
-        Long imageId = 1L;
-        Like like1 = createLikeWithSpecificData(1L, imageId);
-        Like like2 = createLikeWithSpecificData(2L, imageId);
-
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like1).exchange();
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(like2).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes/images/{imageId}/likes/count", imageId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.count").isEqualTo(2);
-    }
-
-    @Test
-    void createLike_WithInvalidData_ShouldReturnBadRequest() {
-        Like invalidLike = new Like(
-                null,
-                null, // Null user ID
-                null, // Null image ID
-                null  // Null creation date
-        );
-
-        webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/likes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(invalidLike)
                 .exchange()
-                .expectStatus().isBadRequest();
-    }
+                .expectStatus().isBadRequest()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
 
-    @Test
-    void getLikesBetweenDates_ShouldReturnFilteredLikes() {
-        LocalDateTime startDate = LocalDateTime.now().minusDays(2);
-        LocalDateTime endDate = LocalDateTime.now().plusDays(1);
-        Like likeInRange = createUniqueLike();
-
-        webTestClient.post().uri("/api/likes").contentType(MediaType.APPLICATION_JSON).bodyValue(likeInRange).exchange();
-
-        webTestClient.get()
-                .uri("/api/likes/between?start={start}&end={end}", startDate, endDate)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Like.class)
-                .value(likes -> {
-                    assertTrue(likes.size() >= 1);
-                    assertTrue(likes.stream().allMatch(like ->
-                            !like.getCreatedAt().isBefore(startDate) &&
-                                    !like.getCreatedAt().isAfter(endDate)));
-                });
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
     }
 }

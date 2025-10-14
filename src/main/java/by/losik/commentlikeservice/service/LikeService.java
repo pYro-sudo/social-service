@@ -42,18 +42,19 @@ public class LikeService {
     @PublishActivityEvent(type = ActivityEventType.ADD_LIKE)
     @PublishActivityEvent(type = ActivityEventType.REMOVE_LIKE)
     @CacheEvict(value = {"likes", "stats"}, allEntries = true)
-    public Mono<Like> toggleLike(Long userId, Long imageId) {
+    public Mono<Boolean> toggleLike(Long userId, Long imageId) {
         return findByUserIdAndImageId(userId, imageId)
                 .flatMap(existingLike ->
                         likeRepository.delete(existingLike)
-                                .then(Mono.just(existingLike))
+                                .then(Mono.just(false))
                 )
                 .switchIfEmpty(Mono.defer(() -> {
                     Like newLike = new Like();
                     newLike.setUserId(userId);
                     newLike.setImageId(imageId);
                     newLike.setCreatedAt(LocalDateTime.now());
-                    return likeRepository.save(newLike);
+                    return likeRepository.save(newLike)
+                            .then(Mono.just(true));
                 }));
     }
 

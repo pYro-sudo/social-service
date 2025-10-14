@@ -1,5 +1,6 @@
 package by.losik.commentlikeservice.entity;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,8 +25,10 @@ public class Like {
     private Long userId;
 
     @Column("image_id")
+    @NotNull(message = "User ID cannot be null")
     private Long imageId;
 
     @Column("created_at")
+    @NotNull(message = "User ID cannot be null")
     private LocalDateTime createdAt;
 }

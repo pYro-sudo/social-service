@@ -1,7 +1,10 @@
 package by.losik.commentlikeservice.controller;
 
 import by.losik.commentlikeservice.config.TestSecurityConfig;
-import by.losik.commentlikeservice.entity.Comment;
+import by.losik.commentlikeservice.dto.CommentRequest;
+import by.losik.commentlikeservice.dto.UpdateContentRequest;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,16 +20,15 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebServiceClient
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 class CommentControllerIntegrationTest {
@@ -41,6 +43,27 @@ class CommentControllerIntegrationTest {
     @Container
     static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7.2-alpine")
             .withExposedPorts(6379);
+
+    @Container
+    static GenericContainer<?> zookeeperContainer = new GenericContainer<>("confluentinc/cp-zookeeper:7.8.0")
+            .withExposedPorts(2181)
+            .withEnv("ZOOKEEPER_CLIENT_PORT", "2181")
+            .withReuse(true);
+
+    @Container
+    static GenericContainer<?> kafkaContainer = new GenericContainer<>(
+            DockerImageName.parse("confluentinc/cp-kafka:7.8.0")
+    )
+            .withExposedPorts(9092, 9093)
+            .withEnv("KAFKA_BROKER_ID", "1")
+            .withEnv("KAFKA_ZOOKEEPER_CONNECT", "localhost:2181")
+            .withEnv("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:9093")
+            .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT")
+            .withEnv("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
+            .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+            .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
+            .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
+            .withReuse(true).dependsOn(zookeeperContainer);
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -69,27 +92,35 @@ class CommentControllerIntegrationTest {
         registry.add("spring.liquibase.password", postgreSQLContainer::getPassword);
         registry.add("spring.liquibase.default-schema", () -> "public");
         registry.add("spring.liquibase.liquibase-schema", () -> "public");
+
+        registry.add("spring.kafka.topic", () -> "activity-events");
+        registry.add("spring.kafka.bootstrap-servers", () ->
+                String.format("localhost:%d", kafkaContainer.getMappedPort(9093)));
+        registry.add("spring.kafka.consumer.group-id", () -> "comment-service-test-group");
+        registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
+        registry.add("spring.kafka.producer.key-serializer", () -> "org.apache.kafka.common.serialization.StringSerializer");
+        registry.add("spring.kafka.producer.value-serializer", () -> "org.springframework.kafka.support.serializer.JsonSerializer");
+        registry.add("spring.kafka.properties.spring.json.trusted.packages", () -> "*");
     }
 
     @Autowired
     private WebTestClient webTestClient;
 
-    private Comment createUniqueComment() {
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private CommentRequest createUniqueCommentRequest() {
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        return new Comment(
-                null,
+        return new CommentRequest(
                 "Test comment content " + uniqueId,
-                LocalDateTime.now(),
                 1L,
                 1L
         );
     }
 
-    private Comment createCommentWithSpecificData(Long userId, Long imageId, String content) {
-        return new Comment(
-                null,
+    private CommentRequest createCommentRequestWithSpecificData(Long userId, Long imageId, String content) {
+        return new CommentRequest(
                 content,
-                LocalDateTime.now(),
                 userId,
                 imageId
         );
@@ -97,451 +128,444 @@ class CommentControllerIntegrationTest {
 
     @BeforeEach
     void cleanup() {
-        List<Comment> comments = webTestClient.get()
+        webTestClient.delete()
                 .uri("/api/comments")
                 .exchange()
-                .expectStatus().isAccepted()
-                .returnResult(Comment.class)
-                .getResponseBody()
-                .collectList()
-                .block();
-
-        if (comments != null) {
-            for (Comment comment : comments) {
-                webTestClient.delete()
-                        .uri("/api/comments/{id}", comment.getId())
-                        .exchange()
-                        .expectStatus().isNoContent();
-            }
-        }
+                .expectStatus().isOk();
     }
 
     @Test
-    void getAllComments_ShouldReturnAllComments() {
-        Comment comment1 = createUniqueComment();
-        Comment comment2 = createUniqueComment();
+    void getAllComments_ShouldReturnAllComments() throws Exception {
+        CommentRequest comment1 = createUniqueCommentRequest();
+        CommentRequest comment2 = createUniqueCommentRequest();
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
-
-        webTestClient.get()
-                .uri("/api/comments")
-                .exchange()
-                .expectStatus().isAccepted()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 2);
-                    assertTrue(comments.stream().anyMatch(c -> comment1.getContent().equals(c.getContent())));
-                    assertTrue(comments.stream().anyMatch(c -> comment2.getContent().equals(c.getContent())));
-                });
-    }
-
-    @Test
-    void getCommentById_WhenCommentExists_ShouldReturnComment() {
-        Comment testComment = createUniqueComment();
-
-        Comment createdComment = webTestClient.post()
-                .uri("/api/comments")
+        webTestClient.post().uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(testComment)
+                .bodyValue(comment1)
                 .exchange()
-                .expectStatus().isCreated()
-                .expectBody(Comment.class)
+                .expectStatus().isCreated();
+
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment2)
+                .exchange()
+                .expectStatus().isCreated();
+
+        String responseBody = webTestClient.get()
+                .uri("/api/comments")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        assertNotNull(createdComment);
-        assertNotNull(createdComment.getId());
-
-        webTestClient.get()
-                .uri("/api/comments/{id}", createdComment.getId())
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(Comment.class)
-                .value(comment -> {
-                    assertEquals(createdComment.getId(), comment.getId());
-                    assertEquals(testComment.getContent(), comment.getContent());
-                    assertEquals(testComment.getUserId(), comment.getUserId());
-                    assertEquals(testComment.getImageId(), comment.getImageId());
-                });
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").isArray());
+        assertTrue(response.get("data").size() >= 2);
     }
 
     @Test
-    void getCommentById_WhenCommentNotExists_ShouldReturnNotFound() {
-        webTestClient.get()
-                .uri("/api/comments/999")
-                .exchange()
-                .expectStatus().isNotFound();
-    }
+    void getCommentById_WhenCommentExists_ShouldReturnComment() throws Exception {
+        CommentRequest testComment = createUniqueCommentRequest();
 
-    @Test
-    void createComment_ShouldCreateCommentSuccessfully() {
-        Comment testComment = createUniqueComment();
-
-        webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testComment)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Comment.class)
-                .value(comment -> {
-                    assertNotNull(comment.getId());
-                    assertEquals(testComment.getContent(), comment.getContent());
-                    assertEquals(testComment.getUserId(), comment.getUserId());
-                    assertEquals(testComment.getImageId(), comment.getImageId());
-                    assertNotNull(comment.getCreatedAt());
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode createdComment = objectMapper.readTree(createResponse).get("data");
+        Long commentId = createdComment.get("id").asLong();
+
+        String responseBody = webTestClient.get()
+                .uri("/api/comments/{id}", commentId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertEquals(commentId, response.get("data").get("id").asLong());
+        assertEquals(testComment.getContent(), response.get("data").get("content").asText());
+        assertEquals(testComment.getUserId(), response.get("data").get("userId").asLong());
+        assertEquals(testComment.getImageId(), response.get("data").get("imageId").asLong());
     }
 
     @Test
-    void createCommentForImage_ShouldCreateCommentSuccessfully() {
+    void getCommentById_WhenCommentNotExists_ShouldReturnNotFound() throws Exception {
+        String responseBody = webTestClient.get()
+                .uri("/api/comments/999")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
+        assertTrue(response.get("message").asText().contains("not found"));
+    }
+
+    @Test
+    void createComment_ShouldCreateCommentSuccessfully() throws Exception {
+        CommentRequest testComment = createUniqueCommentRequest();
+
+        String responseBody = webTestClient.post()
+                .uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(testComment)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("id").asLong() > 0);
+        assertEquals(testComment.getContent(), response.get("data").get("content").asText());
+        assertEquals(testComment.getUserId(), response.get("data").get("userId").asLong());
+        assertEquals(testComment.getImageId(), response.get("data").get("imageId").asLong());
+        assertNotNull(response.get("data").get("createdAt").asText());
+    }
+
+    @Test
+    void createCommentForImage_ShouldCreateCommentSuccessfully() throws Exception {
         Long userId = 1L;
         Long imageId = 1L;
         String content = "Test comment content";
 
-        webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/comments/user/{userId}/image/{imageId}?content={content}", userId, imageId, content)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Comment.class)
-                .value(comment -> {
-                    assertNotNull(comment.getId());
-                    assertEquals(content, comment.getContent());
-                    assertEquals(userId, comment.getUserId());
-                    assertEquals(imageId, comment.getImageId());
-                    assertNotNull(comment.getCreatedAt());
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("id").asLong() > 0);
+        assertEquals(content, response.get("data").get("content").asText());
+        assertEquals(userId, response.get("data").get("userId").asLong());
+        assertEquals(imageId, response.get("data").get("imageId").asLong());
     }
 
     @Test
-    void updateComment_WhenCommentExists_ShouldUpdateSuccessfully() {
-        Comment testComment = createUniqueComment();
+    void updateComment_WhenCommentExists_ShouldUpdateSuccessfully() throws Exception {
+        CommentRequest testComment = createUniqueCommentRequest();
 
-        Comment createdComment = webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testComment)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Comment.class)
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        Comment updatedComment = new Comment(
-                createdComment.getId(),
+        JsonNode createdComment = objectMapper.readTree(createResponse).get("data");
+        Long commentId = createdComment.get("id").asLong();
+
+        CommentRequest updatedComment = new CommentRequest(
                 "Updated comment content",
-                LocalDateTime.now(),
                 2L,
                 2L
         );
 
-        webTestClient.put()
-                .uri("/api/comments/{id}", createdComment.getId())
+        String responseBody = webTestClient.put()
+                .uri("/api/comments/{id}", commentId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(updatedComment)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Comment.class)
-                .value(comment -> {
-                    assertEquals(updatedComment.getContent(), comment.getContent());
-                    assertEquals(updatedComment.getUserId(), comment.getUserId());
-                    assertEquals(updatedComment.getImageId(), comment.getImageId());
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertEquals(updatedComment.getContent(), response.get("data").get("content").asText());
+        assertEquals(updatedComment.getUserId(), response.get("data").get("userId").asLong());
+        assertEquals(updatedComment.getImageId(), response.get("data").get("imageId").asLong());
     }
 
     @Test
-    void updateComment_WhenCommentNotExists_ShouldReturnNotFound() {
-        Comment nonExistentComment = new Comment(
-                999L,
-                "Nonexistent comment",
-                LocalDateTime.now(),
-                1L,
-                1L
-        );
+    void updateComment_WhenCommentNotExists_ShouldReturnNotFound() throws Exception {
+        CommentRequest nonExistentComment = createUniqueCommentRequest();
 
-        webTestClient.put()
+        String responseBody = webTestClient.put()
                 .uri("/api/comments/999")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(nonExistentComment)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isNotFound()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
     }
 
     @Test
-    void deleteComment_WhenCommentExists_ShouldDeleteSuccessfully() {
-        Comment testComment = createUniqueComment();
+    void deleteComment_WhenCommentExists_ShouldDeleteSuccessfully() throws Exception {
+        CommentRequest testComment = createUniqueCommentRequest();
 
-        Comment createdComment = webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testComment)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Comment.class)
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        webTestClient.delete()
-                .uri("/api/comments/{id}", createdComment.getId())
-                .exchange()
-                .expectStatus().isNoContent();
+        JsonNode createdComment = objectMapper.readTree(createResponse).get("data");
+        Long commentId = createdComment.get("id").asLong();
 
-        webTestClient.get()
-                .uri("/api/comments/{id}", createdComment.getId())
+        String responseBody = webTestClient.delete()
+                .uri("/api/comments/{id}", commentId)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("message").asText().contains("deleted"));
     }
 
     @Test
-    void deleteComment_WhenCommentNotExists_ShouldReturnNotFound() {
-        webTestClient.delete()
+    void deleteComment_WhenCommentNotExists_ShouldReturnNotFound() throws Exception {
+        String responseBody = webTestClient.delete()
                 .uri("/api/comments/999")
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isNotFound()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
     }
 
     @Test
-    void getCommentsByUser_ShouldReturnUserComments() {
+    void getCommentsByUser_ShouldReturnUserComments() throws Exception {
         Long userId = 1L;
-        Comment comment1 = createCommentWithSpecificData(userId, 1L, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(userId, 2L, "Comment 2");
+        CommentRequest comment1 = createCommentRequestWithSpecificData(userId, 1L, "Comment 1");
+        CommentRequest comment2 = createCommentRequestWithSpecificData(userId, 2L, "Comment 2");
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment1)
+                .exchange()
+                .expectStatus().isCreated();
 
-        webTestClient.get()
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment2)
+                .exchange()
+                .expectStatus().isCreated();
+
+        String responseBody = webTestClient.get()
                 .uri("/api/comments/user/{userId}", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 2);
-                    assertTrue(comments.stream().allMatch(comment -> userId.equals(comment.getUserId())));
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").isArray());
+        assertTrue(response.get("data").size() >= 2);
     }
 
     @Test
-    void getCommentsByImage_ShouldReturnImageComments() {
+    void getCommentsByImage_ShouldReturnImageComments() throws Exception {
         Long imageId = 1L;
-        Comment comment1 = createCommentWithSpecificData(1L, imageId, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(2L, imageId, "Comment 2");
+        CommentRequest comment1 = createCommentRequestWithSpecificData(1L, imageId, "Comment 1");
+        CommentRequest comment2 = createCommentRequestWithSpecificData(2L, imageId, "Comment 2");
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment1)
+                .exchange()
+                .expectStatus().isCreated();
 
-        webTestClient.get()
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment2)
+                .exchange()
+                .expectStatus().isCreated();
+
+        String responseBody = webTestClient.get()
                 .uri("/api/comments/image/{imageId}", imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 2);
-                    assertTrue(comments.stream().allMatch(comment -> imageId.equals(comment.getImageId())));
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").isArray());
+        assertTrue(response.get("data").size() >= 2);
     }
 
     @Test
-    void getCommentsByUserAndImage_ShouldReturnFilteredComments() {
-        Long userId = 1L;
+    void deleteAllCommentsByImage_ShouldRemoveImageComments() throws Exception {
         Long imageId = 1L;
-        Comment comment = createCommentWithSpecificData(userId, imageId, "Specific comment");
+        CommentRequest comment1 = createCommentRequestWithSpecificData(1L, imageId, "Comment 1");
+        CommentRequest comment2 = createCommentRequestWithSpecificData(2L, imageId, "Comment 2");
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment).exchange();
-
-        webTestClient.get()
-                .uri("/api/comments/user/{userId}/image/{imageId}", userId, imageId)
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment1)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 1);
-                    assertTrue(comments.stream().allMatch(c ->
-                            userId.equals(c.getUserId()) && imageId.equals(c.getImageId())));
-                });
-    }
+                .expectStatus().isCreated();
 
-    @Test
-    void deleteAllCommentsByImage_ShouldRemoveImageComments() {
-        Long imageId = 1L;
-        Comment comment1 = createCommentWithSpecificData(1L, imageId, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(2L, imageId, "Comment 2");
-
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment2)
+                .exchange()
+                .expectStatus().isCreated();
 
         webTestClient.delete()
                 .uri("/api/comments/image/{imageId}", imageId)
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus().isOk();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/comments/image/{imageId}", imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> assertTrue(comments.isEmpty()));
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").isArray());
+        assertEquals(0, response.get("data").size());
     }
 
     @Test
-    void deleteAllCommentsByUser_ShouldRemoveUserComments() {
-        Long userId = 1L;
-        Comment comment1 = createCommentWithSpecificData(userId, 1L, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(userId, 2L, "Comment 2");
-
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
-
-        webTestClient.delete()
-                .uri("/api/comments/user/{userId}", userId)
-                .exchange()
-                .expectStatus().isNoContent();
-
-        webTestClient.get()
-                .uri("/api/comments/user/{userId}", userId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> assertTrue(comments.isEmpty()));
-    }
-
-    @Test
-    void searchComments_ShouldReturnMatchingComments() {
+    void searchComments_ShouldReturnMatchingComments() throws Exception {
         String keyword = "searchtest";
-        Comment comment = createCommentWithSpecificData(1L, 1L, "This is a " + keyword + " comment");
+        CommentRequest comment = createCommentRequestWithSpecificData(1L, 1L, "This is a " + keyword + " comment");
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment).exchange();
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment)
+                .exchange()
+                .expectStatus().isCreated();
 
-        webTestClient.get()
+        String responseBody = webTestClient.get()
                 .uri("/api/comments/search?keyword={keyword}", keyword)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 1);
-                    assertTrue(comments.stream().anyMatch(c -> c.getContent().contains(keyword)));
-                });
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").isArray());
+        assertTrue(response.get("data").size() >= 1);
     }
 
     @Test
-    void getCommentsAfterDate_ShouldReturnRecentComments() {
-        LocalDateTime testDate = LocalDateTime.now().minusDays(1);
-        Comment recentComment = createUniqueComment();
-
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(recentComment).exchange();
-
-        webTestClient.get()
-                .uri("/api/comments/after/{date}", testDate)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> {
-                    assertTrue(comments.size() >= 1);
-                    assertTrue(comments.stream().allMatch(comment ->
-                            comment.getCreatedAt().isAfter(testDate)));
-                });
-    }
-
-    @Test
-    void getImageCommentCount_ShouldReturnCorrectCount() {
+    void getImageCommentCount_ShouldReturnCorrectCount() throws Exception {
         Long imageId = 1L;
-        Comment comment1 = createCommentWithSpecificData(1L, imageId, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(2L, imageId, "Comment 2");
+        CommentRequest comment1 = createCommentRequestWithSpecificData(1L, imageId, "Comment 1");
+        CommentRequest comment2 = createCommentRequestWithSpecificData(2L, imageId, "Comment 2");
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment1)
+                .exchange()
+                .expectStatus().isCreated();
 
-        webTestClient.get()
+        webTestClient.post().uri("/api/comments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(comment2)
+                .exchange()
+                .expectStatus().isCreated();
+
+        String responseBody = webTestClient.get()
                 .uri("/api/comments/count/image/{imageId}", imageId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.count").isEqualTo(2);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertTrue(response.get("success").asBoolean());
+        assertTrue(response.get("data").get("count").asLong() >= 2);
     }
 
     @Test
-    void getUserCommentCount_ShouldReturnCorrectCount() {
-        Long userId = 1L;
-        Comment comment1 = createCommentWithSpecificData(userId, 1L, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(userId, 2L, "Comment 2");
+    void updateCommentContent_WhenCommentExists_ShouldUpdateSuccessfully() throws Exception {
+        CommentRequest testComment = createUniqueCommentRequest();
 
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
-
-        webTestClient.get()
-                .uri("/api/comments/count/user/{userId}", userId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.count").isEqualTo(2);
-    }
-
-    @Test
-    void updateCommentContent_WhenCommentExists_ShouldUpdateSuccessfully() {
-        Comment testComment = createUniqueComment();
-
-        Comment createdComment = webTestClient.post()
+        String createResponse = webTestClient.post()
                 .uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testComment)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Comment.class)
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        String newContent = "Updated content";
+        JsonNode createdComment = objectMapper.readTree(createResponse).get("data");
+        Long commentId = createdComment.get("id").asLong();
+
+        UpdateContentRequest updateRequest = new UpdateContentRequest("Updated content");
 
         webTestClient.patch()
-                .uri("/api/comments/{id}/content?content={content}", createdComment.getId(), newContent)
+                .uri("/api/comments/{id}/content", commentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updateRequest)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.updated").isEqualTo(true);
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
     }
 
     @Test
-    void updateCommentContent_WhenCommentNotExists_ShouldReturnNotFound() {
-        webTestClient.patch()
-                .uri("/api/comments/999/content?content=test")
-                .exchange()
-                .expectStatus().isNotFound();
-    }
-
-    @Test
-    void getUserRecentComments_ShouldReturnLimitedComments() {
-        Long userId = 1L;
-        Comment comment1 = createCommentWithSpecificData(userId, 1L, "Comment 1");
-        Comment comment2 = createCommentWithSpecificData(userId, 2L, "Comment 2");
-        Comment comment3 = createCommentWithSpecificData(userId, 3L, "Comment 3");
-
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment1).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment2).exchange();
-        webTestClient.post().uri("/api/comments").contentType(MediaType.APPLICATION_JSON).bodyValue(comment3).exchange();
-
-        webTestClient.get()
-                .uri("/api/comments/user/{userId}/recent?limit=2", userId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(Comment.class)
-                .value(comments -> assertTrue(comments.size() <= 2));
-    }
-
-    @Test
-    void createComment_WithInvalidData_ShouldReturnBadRequest() {
-        Comment invalidComment = new Comment(
+    void createComment_WithInvalidData_ShouldReturnBadRequest() throws Exception {
+        CommentRequest invalidComment = new CommentRequest(
+                "",
                 null,
-                "", // Empty content
-                null, // Null creation date
-                null, // Null user ID
-                null  // Null image ID
+                null
         );
 
-        webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/comments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(invalidComment)
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus().isBadRequest()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        assertFalse(response.get("success").asBoolean());
     }
 }

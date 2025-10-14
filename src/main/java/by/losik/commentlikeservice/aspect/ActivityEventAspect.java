@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
@@ -22,7 +23,8 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class ActivityEventAspect {
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private static final String ACTIVITY_TOPIC = "activity-events";
+    @Value("${spring.kafka.topic:activity-events}")
+    private String ACTIVITY_TOPIC;
 
     @AfterReturning(value = "@annotation(publishActivityEvents)", returning = "result")
     public void publishActivityEvents(JoinPoint joinPoint, @NonNull PublishActivityEvents publishActivityEvents, Object result) {
@@ -51,8 +53,7 @@ public class ActivityEventAspect {
                     }
                 })
                 .doOnError(error -> log.error("Error in reactive method, skipping event sending: {}",
-                        joinPoint.getSignature().getName(), error))
-                .subscribe();
+                        joinPoint.getSignature().getName(), error));
     }
 
     private void handleSyncMethod(Object result, ActivityEventType eventType, JoinPoint joinPoint) {
