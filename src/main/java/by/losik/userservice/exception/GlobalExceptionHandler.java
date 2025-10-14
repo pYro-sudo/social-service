@@ -1,4 +1,3 @@
-// GlobalExceptionHandler.java
 package by.losik.userservice.exception;
 
 import org.springframework.http.HttpStatus;
