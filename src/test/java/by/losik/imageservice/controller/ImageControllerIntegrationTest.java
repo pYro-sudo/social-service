@@ -1,7 +1,10 @@
 package by.losik.imageservice.controller;
 
 import by.losik.imageservice.config.TestSecurityConfig;
-import by.losik.imageservice.entity.Image;
+import by.losik.imageservice.dto.ImageCreateDTO;
+import by.losik.imageservice.dto.ImageResponseDTO;
+import by.losik.imageservice.dto.ImageStatsDTO;
+import by.losik.imageservice.dto.ImageUpdateDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +40,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebServiceClient
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 class ImageControllerIntegrationTest {
@@ -79,7 +82,7 @@ class ImageControllerIntegrationTest {
         registry.add("spring.data.redis.timeout", () -> java.time.Duration.ofSeconds(10));
         registry.add("spring.data.redis.lettuce.pool.max-active", () -> 8);
         registry.add("spring.data.redis.lettuce.pool.max-idle", () -> 8);
-        registry.add("spring.data.redis.lettuce.pool.min-idle", () -> 0);;
+        registry.add("spring.data.redis.lettuce.pool.min-idle", () -> 0);
 
         registry.add("spring.liquibase.url", postgreSQLContainer::getJdbcUrl);
         registry.add("spring.liquibase.user", postgreSQLContainer::getUsername);
@@ -116,23 +119,23 @@ class ImageControllerIntegrationTest {
                         .bucket("test-images")
                         .build());
             } catch (Exception e) {
-                System.out.println("welp");
+                System.out.println("Bucket already exists");
             }
         }
     }
 
     private void cleanupDatabase() {
-        List<Image> images = webTestClient.get()
+        List<ImageResponseDTO> images = webTestClient.get()
                 .uri("/api/images")
                 .exchange()
                 .expectStatus().isOk()
-                .returnResult(Image.class)
+                .returnResult(ImageResponseDTO.class)
                 .getResponseBody()
                 .collectList()
                 .block();
 
         if (images != null) {
-            for (Image image : images) {
+            for (ImageResponseDTO image : images) {
                 webTestClient.delete()
                         .uri("/api/images/{id}", image.getId())
                         .exchange()
@@ -141,25 +144,28 @@ class ImageControllerIntegrationTest {
         }
     }
 
-    private Image createUniqueImage() {
+    private ImageCreateDTO createUniqueImageCreateDTO() {
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        return new Image(
-                null,
+        return new ImageCreateDTO(
                 "http://localhost:4566/test-images/users/" + uniqueId + ".jpg",
                 "Test image description " + uniqueId,
-                LocalDate.now(),
                 1L
         );
     }
 
-    private Image createImageWithSpecificData(Long userId, String description) {
+    private ImageCreateDTO createImageCreateDTOWithSpecificData(Long userId, String description) {
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        return new Image(
-                null,
+        return new ImageCreateDTO(
                 "http://localhost:4566/test-images/users/" + uniqueId + ".jpg",
                 description,
-                LocalDate.now(),
                 userId
+        );
+    }
+
+    private ImageUpdateDTO createImageUpdateDTO() {
+        return new ImageUpdateDTO(
+                "http://localhost:4566/test-images/updated.jpg",
+                "Updated description"
         );
     }
 
@@ -193,7 +199,7 @@ class ImageControllerIntegrationTest {
                 .bodyValue(builder.build())
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .value(image -> {
                     assertNotNull(image.getId());
                     assertNotNull(image.getUrl());
@@ -206,15 +212,15 @@ class ImageControllerIntegrationTest {
 
     @Test
     void getImageById_WhenImageExists_ShouldReturnImage() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
-        Image createdImage = webTestClient.post()
+        ImageResponseDTO createdImage = webTestClient.post()
                 .uri("/api/images")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -224,7 +230,7 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/{id}", createdImage.getId())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .value(image -> {
                     assertEquals(createdImage.getId(), image.getId());
                     assertEquals(testImage.getUrl(), image.getUrl());
@@ -243,7 +249,7 @@ class ImageControllerIntegrationTest {
 
     @Test
     void createImage_ShouldCreateSuccessfully() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
         webTestClient.post()
                 .uri("/api/images")
@@ -251,37 +257,33 @@ class ImageControllerIntegrationTest {
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .value(image -> {
                     assertNotNull(image.getId());
                     assertEquals(testImage.getUrl(), image.getUrl());
                     assertEquals(testImage.getDescription(), image.getDescription());
                     assertEquals(testImage.getUserId(), image.getUserId());
                     assertNotNull(image.getUploadedAt());
+                    assertEquals(LocalDate.now(), image.getUploadedAt());
                 });
     }
 
     @Test
     void updateImage_WhenImageExists_ShouldUpdateSuccessfully() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
-        Image createdImage = webTestClient.post()
+        ImageResponseDTO createdImage = webTestClient.post()
                 .uri("/api/images")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .returnResult()
                 .getResponseBody();
 
-        Image updatedImage = new Image(
-                createdImage.getId(),
-                "http://localhost:4566/test-images/updated.jpg",
-                "Updated description",
-                LocalDate.now(),
-                2L
-        );
+        assertNotNull(createdImage);
+        ImageUpdateDTO updatedImage = createImageUpdateDTO();
 
         webTestClient.put()
                 .uri("/api/images/{id}", createdImage.getId())
@@ -289,28 +291,30 @@ class ImageControllerIntegrationTest {
                 .bodyValue(updatedImage)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .value(image -> {
                     assertEquals(updatedImage.getUrl(), image.getUrl());
                     assertEquals(updatedImage.getDescription(), image.getDescription());
-                    assertEquals(updatedImage.getUserId(), image.getUserId());
+                    // User ID should remain unchanged
+                    assertEquals(createdImage.getUserId(), image.getUserId());
                 });
     }
 
     @Test
     void deleteImage_WhenImageExists_ShouldDeleteSuccessfully() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
-        Image createdImage = webTestClient.post()
+        ImageResponseDTO createdImage = webTestClient.post()
                 .uri("/api/images")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .returnResult()
                 .getResponseBody();
 
+        assertNotNull(createdImage);
         webTestClient.delete()
                 .uri("/api/images/{id}", createdImage.getId())
                 .exchange()
@@ -325,9 +329,9 @@ class ImageControllerIntegrationTest {
     @Test
     void getUserRecentImages_ShouldReturnLimitedImages() {
         Long userId = 1L;
-        Image image1 = createImageWithSpecificData(userId, "Image 1");
-        Image image2 = createImageWithSpecificData(userId, "Image 2");
-        Image image3 = createImageWithSpecificData(userId, "Image 3");
+        ImageCreateDTO image1 = createImageCreateDTOWithSpecificData(userId, "Image 1");
+        ImageCreateDTO image2 = createImageCreateDTOWithSpecificData(userId, "Image 2");
+        ImageCreateDTO image3 = createImageCreateDTOWithSpecificData(userId, "Image 3");
 
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image1).exchange();
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image2).exchange();
@@ -337,14 +341,14 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/user/{userId}/recent?limit=2", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Image.class)
+                .expectBodyList(ImageResponseDTO.class)
                 .value(images -> assertTrue(images.size() <= 2));
     }
 
     @Test
     void searchImages_ShouldReturnMatchingImages() {
         String keyword = "searchtest";
-        Image image = createImageWithSpecificData(1L, "This is a " + keyword + " image");
+        ImageCreateDTO image = createImageCreateDTOWithSpecificData(1L, "This is a " + keyword + " image");
 
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image).exchange();
 
@@ -352,7 +356,7 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/search?keyword={keyword}", keyword)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Image.class)
+                .expectBodyList(ImageResponseDTO.class)
                 .value(images -> {
                     assertTrue(images.size() >= 1);
                     assertTrue(images.stream().anyMatch(img -> img.getDescription().contains(keyword)));
@@ -361,19 +365,19 @@ class ImageControllerIntegrationTest {
 
     @Test
     void getImageByUrl_WhenImageExists_ShouldReturnImage() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
-        Image createdImage = webTestClient.post()
+        ImageResponseDTO createdImage = webTestClient.post()
                 .uri("/api/images")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .returnResult()
                 .getResponseBody();
 
-        java.net.URLEncoder.encode(createdImage.getUrl(), java.nio.charset.StandardCharsets.UTF_8);
+        assertNotNull(createdImage);
 
         webTestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -382,7 +386,7 @@ class ImageControllerIntegrationTest {
                         .build())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .value(image -> assertEquals(createdImage.getId(), image.getId()));
     }
 
@@ -402,10 +406,37 @@ class ImageControllerIntegrationTest {
     }
 
     @Test
+    void checkUrlAvailability_WhenUrlNotAvailable_ShouldReturnFalse() {
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
+
+        ImageResponseDTO createdImage = webTestClient.post()
+                .uri("/api/images")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(testImage)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(ImageResponseDTO.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertNotNull(createdImage);
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/images/check/url")
+                        .queryParam("url", createdImage.getUrl())
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.available").isEqualTo(false);
+    }
+
+    @Test
     void getUserImageCount_ShouldReturnCorrectCount() {
         Long userId = 1L;
-        Image image1 = createImageWithSpecificData(userId, "Image 1");
-        Image image2 = createImageWithSpecificData(userId, "Image 2");
+        ImageCreateDTO image1 = createImageCreateDTOWithSpecificData(userId, "Image 1");
+        ImageCreateDTO image2 = createImageCreateDTOWithSpecificData(userId, "Image 2");
 
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image1).exchange();
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image2).exchange();
@@ -420,33 +451,34 @@ class ImageControllerIntegrationTest {
 
     @Test
     void updateImageDescription_WhenImageExists_ShouldUpdateSuccessfully() {
-        Image testImage = createUniqueImage();
+        ImageCreateDTO testImage = createUniqueImageCreateDTO();
 
-        Image createdImage = webTestClient.post()
+        ImageResponseDTO createdImage = webTestClient.post()
                 .uri("/api/images")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testImage)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(Image.class)
+                .expectBody(ImageResponseDTO.class)
                 .returnResult()
                 .getResponseBody();
 
         String newDescription = "Updated description";
 
+        assertNotNull(createdImage);
         webTestClient.patch()
                 .uri("/api/images/{id}/description?description={description}", createdImage.getId(), newDescription)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.updated").isEqualTo(false);
+                .jsonPath("$.updated").isEqualTo(true);
     }
 
     @Test
     void getUserImageStats_ShouldReturnStats() {
         Long userId = 1L;
-        Image image1 = createImageWithSpecificData(userId, "Image 1");
-        Image image2 = createImageWithSpecificData(userId, "Image 2");
+        ImageCreateDTO image1 = createImageCreateDTOWithSpecificData(userId, "Image 1");
+        ImageCreateDTO image2 = createImageCreateDTOWithSpecificData(userId, "Image 2");
 
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image1).exchange();
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image2).exchange();
@@ -455,9 +487,12 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/user/{userId}/stats", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.totalImages").isEqualTo(2)
-                .jsonPath("$.recentUploads").isArray();
+                .expectBody(ImageStatsDTO.class)
+                .value(stats -> {
+                    assertEquals(2L, stats.getTotalImages());
+                    assertNotNull(stats.getRecentUploads());
+                    assertTrue(stats.getRecentUploads().size() <= 5);
+                });
     }
 
     @Test
@@ -472,9 +507,8 @@ class ImageControllerIntegrationTest {
 
     @Test
     void getAllImagesPaged_ShouldReturnPagedResults() {
-        // Create some test images
         for (int i = 0; i < 5; i++) {
-            Image image = createUniqueImage();
+            ImageCreateDTO image = createUniqueImageCreateDTO();
             webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image).exchange();
         }
 
@@ -482,7 +516,7 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images?page=0&size=3")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Image.class)
+                .expectBodyList(ImageResponseDTO.class)
                 .value(images -> assertTrue(images.size() <= 3));
     }
 
@@ -490,9 +524,8 @@ class ImageControllerIntegrationTest {
     void getUserImagesPaged_ShouldReturnPagedUserImages() {
         Long userId = 1L;
 
-        // Create test images for user
         for (int i = 0; i < 5; i++) {
-            Image image = createImageWithSpecificData(userId, "Image " + i);
+            ImageCreateDTO image = createImageCreateDTOWithSpecificData(userId, "Image " + i);
             webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image).exchange();
         }
 
@@ -500,7 +533,7 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/user/{userId}?page=0&size=3", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Image.class)
+                .expectBodyList(ImageResponseDTO.class)
                 .value(images -> {
                     assertTrue(images.size() <= 3);
                     assertTrue(images.stream().allMatch(img -> userId.equals(img.getUserId())));
@@ -510,8 +543,8 @@ class ImageControllerIntegrationTest {
     @Test
     void deleteAllUserImages_ShouldRemoveAllUserImages() {
         Long userId = 1L;
-        Image image1 = createImageWithSpecificData(userId, "Image 1");
-        Image image2 = createImageWithSpecificData(userId, "Image 2");
+        ImageCreateDTO image1 = createImageCreateDTOWithSpecificData(userId, "Image 1");
+        ImageCreateDTO image2 = createImageCreateDTOWithSpecificData(userId, "Image 2");
 
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image1).exchange();
         webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image2).exchange();
@@ -525,7 +558,76 @@ class ImageControllerIntegrationTest {
                 .uri("/api/images/user/{userId}", userId)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Image.class)
+                .expectBodyList(ImageResponseDTO.class)
                 .value(images -> assertEquals(0, images.size()));
+    }
+
+    @Test
+    void createImage_WithInvalidData_ShouldReturnBadRequest() {
+        ImageCreateDTO invalidImage = new ImageCreateDTO("", "", null);
+
+        webTestClient.post()
+                .uri("/api/images")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(invalidImage)
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void updateImage_WithInvalidId_ShouldReturnNotFound() {
+        ImageUpdateDTO updateDTO = createImageUpdateDTO();
+
+        webTestClient.put()
+                .uri("/api/images/999")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(updateDTO)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void uploadImage_WithInvalidFile_ShouldReturnBadRequest() {
+        byte[] invalidBytes = new byte[]{};
+
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+        builder.part("file", new ByteArrayResource(invalidBytes) {
+            @Override
+            public @NonNull String getFilename() {
+                return "empty.jpg";
+            }
+        }).contentType(MediaType.IMAGE_JPEG);
+        builder.part("description", "Test description", MediaType.TEXT_PLAIN);
+
+        webTestClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/images/upload")
+                        .queryParam("userId", "1")
+                        .build())
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .bodyValue(builder.build())
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void getImagesBetweenDates_ShouldReturnFilteredImages() {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
+
+        ImageCreateDTO image1 = createImageCreateDTOWithSpecificData(1L, "Recent image");
+
+        webTestClient.post().uri("/api/images").contentType(MediaType.APPLICATION_JSON).bodyValue(image1).exchange();
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/images/between")
+                        .queryParam("start", startDate)
+                        .queryParam("end", endDate)
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(ImageResponseDTO.class)
+                .value(images -> assertTrue(images.size() >= 1));
     }
 }

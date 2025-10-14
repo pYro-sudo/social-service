@@ -37,8 +37,8 @@ spring:
   cloud:
     aws:
       credentials:
-        access-key: ${SPRING_CLOUD_AWS_CREDENTIALS_ACCESS-KEY:test}
-        secret-key: ${SPRING_CLOUD_AWS_CREDENTIALS_SECRET-KEY:test}
+        access-key: ${SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY:test}
+        secret-key: ${SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY:test}
       s3:
         bucket-name: images
         endpoint: ${SPRING_CLOUD_AWS_S3_ENDPOINT:http://localhost:4566}
@@ -47,6 +47,11 @@ spring:
     auto: true
     proxy-target-class: true
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
 logging:
   level:
     org.springframework.r2dbc: DEBUG
@@ -54,4 +59,13 @@ logging:
     by.losik.imageservice: DEBUG
 
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
