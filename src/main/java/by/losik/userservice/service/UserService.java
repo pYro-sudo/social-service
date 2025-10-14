@@ -1,9 +1,15 @@
 package by.losik.userservice.service;
 
 import by.losik.userservice.annotation.Loggable;
+import by.losik.userservice.dto.CreateUserDTO;
+import by.losik.userservice.dto.UpdateUserDTO;
+import by.losik.userservice.dto.UserDTO;
 import by.losik.userservice.entity.User;
+import by.losik.userservice.exception.UserAlreadyExistsException;
+import by.losik.userservice.exception.UserNotFoundException;
+import by.losik.userservice.mapping.UserMapper;
 import by.losik.userservice.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.EnableCaching;
@@ -14,51 +20,91 @@ import reactor.core.publisher.Mono;
 @Service
 @Loggable(level = Loggable.Level.DEBUG, logResult = true)
 @EnableCaching
+@RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
 
-    @Autowired
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public Flux<User> findAll() {
-        return userRepository.findAll();
+    public Flux<UserDTO> findAll() {
+        return userRepository.findAll()
+                .map(userMapper::toDTO);
     }
 
     @Cacheable(value = "users", key = "#id", unless = "#result == null")
-    public Mono<User> findById(Long id) {
-        return userRepository.findById(id);
+    public Mono<UserDTO> findById(Long id) {
+        return userRepository.findById(id)
+                .map(userMapper::toDTO)
+                .switchIfEmpty(Mono.error(new UserNotFoundException(id)));
     }
 
     @Cacheable(value = "users", key = "#username", unless = "#result == null")
-    public Mono<User> findByUsername(String username) {
-        return userRepository.findByUsername(username);
+    public Mono<UserDTO> findByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(userMapper::toDTO)
+                .switchIfEmpty(Mono.error(new UserNotFoundException("username", username)));
     }
 
     @Cacheable(value = "users", key = "#email", unless = "#result == null")
-    public Mono<User> findByEmail(String email) {
-        return userRepository.findByEmail(email);
+    public Mono<UserDTO> findByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .map(userMapper::toDTO)
+                .switchIfEmpty(Mono.error(new UserNotFoundException("email", email)));
     }
 
-    @CacheEvict(value = "users", key = "#user.id")
-    public Mono<User> save(User user) {
-        return userRepository.save(user);
+    @CacheEvict(value = "users", allEntries = true)
+    public Mono<UserDTO> save(CreateUserDTO createUserDTO) {
+        return checkUserExists(createUserDTO.getUsername(), createUserDTO.getEmail())
+                .then(Mono.defer(() -> {
+                    User user = userMapper.toEntity(createUserDTO);
+                    return userRepository.save(user)
+                            .map(userMapper::toDTO);
+                }));
     }
 
     @CacheEvict(value = "users", key = "#id")
-    public Mono<User> update(Long id, User user) {
+    public Mono<UserDTO> update(Long id, UpdateUserDTO updateUserDTO) {
         return userRepository.findById(id)
+                .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
                 .flatMap(existingUser -> {
-                    user.setId(id);
-                    return userRepository.save(user);
+                    if (updateUserDTO.getUsername() != null &&
+                            !existingUser.getUsername().equals(updateUserDTO.getUsername())) {
+                        return userRepository.existsByUsername(updateUserDTO.getUsername())
+                                .flatMap(exists -> {
+                                    if (exists) {
+                                        return Mono.error(new UserAlreadyExistsException("username", updateUserDTO.getUsername()));
+                                    }
+                                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
+                                    return userRepository.save(existingUser);
+                                });
+                    }
+
+                    if (updateUserDTO.getEmail() != null &&
+                            !existingUser.getEmail().equals(updateUserDTO.getEmail())) {
+                        return userRepository.existsByEmail(updateUserDTO.getEmail())
+                                .flatMap(exists -> {
+                                    if (exists) {
+                                        return Mono.error(new UserAlreadyExistsException("email", updateUserDTO.getEmail()));
+                                    }
+                                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
+                                    return userRepository.save(existingUser);
+                                });
+                    }
+
+                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
+                    return userRepository.save(existingUser);
                 })
-                .switchIfEmpty(Mono.error(new RuntimeException("User not found with id: " + id)));
+                .map(userMapper::toDTO);
     }
 
     @CacheEvict(value = "users", key = "#id")
     public Mono<Void> deleteById(Long id) {
-        return userRepository.deleteById(id);
+        return userRepository.existsById(id)
+                .flatMap(exists -> {
+                    if (!exists) {
+                        return Mono.error(new UserNotFoundException(id));
+                    }
+                    return userRepository.deleteById(id);
+                });
     }
 
     public Mono<Boolean> existsByUsername(String username) {
@@ -81,9 +127,10 @@ public class UserService {
         return existsByEmail(email).map(exists -> !exists);
     }
 
-    public Flux<User> findByUserRole(String role) {
+    public Flux<UserDTO> findByUserRole(String role) {
         return userRepository.findAll()
-                .filter(user -> user.getUserRole().name().equalsIgnoreCase(role));
+                .filter(user -> user.getUserRole().name().equalsIgnoreCase(role))
+                .map(userMapper::toDTO);
     }
 
     public Mono<Long> countAll() {
@@ -98,5 +145,25 @@ public class UserService {
 
     public Mono<Void> deleteAll() {
         return userRepository.deleteAll();
+    }
+
+    private Mono<Void> checkUserExists(String username, String email) {
+        return Mono.zip(
+                userRepository.existsByUsername(username),
+                userRepository.existsByEmail(email)
+        ).flatMap(tuple -> {
+            boolean usernameExists = tuple.getT1();
+            boolean emailExists = tuple.getT2();
+
+            if (usernameExists && emailExists) {
+                return Mono.error(new UserAlreadyExistsException("username and email", username + ", " + email));
+            } else if (usernameExists) {
+                return Mono.error(new UserAlreadyExistsException("username", username));
+            } else if (emailExists) {
+                return Mono.error(new UserAlreadyExistsException("email", email));
+            }
+
+            return Mono.empty();
+        });
     }
 }

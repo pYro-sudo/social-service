@@ -1,5 +1,6 @@
 package by.losik.userservice.entity;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import org.springframework.data.annotation.Id;
@@ -22,6 +23,7 @@ public class User {
     private String username;
 
     @Column("email")
+    @Email
     private String email;
 
     @Column("password")

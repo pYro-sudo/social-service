@@ -1,10 +1,12 @@
 package by.losik.userservice.controller;
 
 import by.losik.userservice.annotation.Loggable;
-import by.losik.userservice.entity.User;
+import by.losik.userservice.dto.CreateUserDTO;
+import by.losik.userservice.dto.UpdateUserDTO;
+import by.losik.userservice.dto.UserDTO;
 import by.losik.userservice.service.UserService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,22 +18,18 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/users")
 @Loggable(level = Loggable.Level.DEBUG, logResult = true)
+@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
 
-    @Autowired
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
     @GetMapping
-    public Flux<User> getAllUsers() {
+    public Flux<UserDTO> getAllUsers() {
         return userService.findAll();
     }
 
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<User>> getUserById(@PathVariable Long id) {
+    public Mono<ResponseEntity<UserDTO>> getUserById(@PathVariable Long id) {
         return userService.findById(id)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
@@ -39,13 +37,13 @@ public class UserController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<User> createUser(@Valid @RequestBody User user) {
-        return userService.save(user);
+    public Mono<UserDTO> createUser(@Valid @RequestBody CreateUserDTO createUserDTO) {
+        return userService.save(createUserDTO);
     }
 
     @PutMapping("/{id}")
-    public Mono<ResponseEntity<User>> updateUser(@PathVariable Long id, @Valid @RequestBody User user) {
-        return userService.update(id, user)
+    public Mono<ResponseEntity<UserDTO>> updateUser(@PathVariable Long id, @Valid @RequestBody UpdateUserDTO updateUserDTO) {
+        return userService.update(id, updateUserDTO)
                 .map(ResponseEntity::ok)
                 .onErrorResume(RuntimeException.class, error ->
                         error.getMessage().contains("not found")
@@ -69,14 +67,14 @@ public class UserController {
     }
 
     @GetMapping("/username/{username}")
-    public Mono<ResponseEntity<User>> getUserByUsername(@PathVariable String username) {
+    public Mono<ResponseEntity<UserDTO>> getUserByUsername(@PathVariable String username) {
         return userService.findByUsername(username)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/email/{email}")
-    public Mono<ResponseEntity<User>> getUserByEmail(@PathVariable String email) {
+    public Mono<ResponseEntity<UserDTO>> getUserByEmail(@PathVariable String email) {
         return userService.findByEmail(email)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
@@ -107,7 +105,7 @@ public class UserController {
     }
 
     @GetMapping("/role/{role}")
-    public Flux<User> getUsersByRole(@PathVariable String role) {
+    public Flux<UserDTO> getUsersByRole(@PathVariable String role) {
         return userService.findByUserRole(role);
     }
 

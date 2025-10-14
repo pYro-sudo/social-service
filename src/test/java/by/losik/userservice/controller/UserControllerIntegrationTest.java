@@ -1,12 +1,13 @@
 package by.losik.userservice.controller;
 
 import by.losik.userservice.config.TestSecurityConfig;
+import by.losik.userservice.dto.CreateUserDTO;
+import by.losik.userservice.dto.UpdateUserDTO;
+import by.losik.userservice.dto.UserDTO;
 import by.losik.userservice.entity.Role;
-import by.losik.userservice.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.webservices.client.AutoConfigureWebServiceClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -24,8 +25,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureWebServiceClient
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 class UserControllerIntegrationTest {
@@ -62,22 +62,21 @@ class UserControllerIntegrationTest {
         registry.add("spring.data.redis.timeout", () -> java.time.Duration.ofSeconds(10));
         registry.add("spring.data.redis.lettuce.pool.max-active", () -> 8);
         registry.add("spring.data.redis.lettuce.pool.max-idle", () -> 8);
-        registry.add("spring.data.redis.lettuce.pool.min-idle", () -> 0);;
+        registry.add("spring.data.redis.lettuce.pool.min-idle", () -> 0);
 
         registry.add("spring.liquibase.url", postgreSQLContainer::getJdbcUrl);
         registry.add("spring.liquibase.user", postgreSQLContainer::getUsername);
         registry.add("spring.liquibase.password", postgreSQLContainer::getPassword);
         registry.add("spring.liquibase.default-schema", () -> "public");
         registry.add("spring.liquibase.liquibase-schema", () -> "public");
-
     }
 
     @Autowired
     private WebTestClient webTestClient;
 
-    private User createUniqueUser() {
+    private CreateUserDTO createUniqueUser() {
         String uniqueId = UUID.randomUUID().toString().substring(0, 8);
-        return User.builder()
+        return CreateUserDTO.builder()
                 .username("user_" + uniqueId)
                 .email("user_" + uniqueId + "@example.com")
                 .password("password")
@@ -96,8 +95,8 @@ class UserControllerIntegrationTest {
 
     @Test
     void getAllUsers_ShouldReturnAllUsers() {
-        User user1 = createUniqueUser();
-        User user2 = createUniqueUser();
+        CreateUserDTO user1 = createUniqueUser();
+        CreateUserDTO user2 = createUniqueUser();
 
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user1).exchange();
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user2).exchange();
@@ -106,7 +105,7 @@ class UserControllerIntegrationTest {
                 .uri("/api/users")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(User.class)
+                .expectBodyList(UserDTO.class)
                 .value(users -> {
                     assertTrue(users.size() >= 2);
                     assertTrue(users.stream().anyMatch(u -> user1.getUsername().equals(u.getUsername())));
@@ -116,15 +115,15 @@ class UserControllerIntegrationTest {
 
     @Test
     void getUserById_WhenUserExists_ShouldReturnUser() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -134,7 +133,7 @@ class UserControllerIntegrationTest {
                 .uri("/api/users/{id}", createdUser.getId())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .value(user -> {
                     assertEquals(createdUser.getId(), user.getId());
                     assertEquals(testUser.getUsername(), user.getUsername());
@@ -152,7 +151,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void createUser_ShouldCreateUserSuccessfully() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
         webTestClient.post()
                 .uri("/api/users")
@@ -160,31 +159,33 @@ class UserControllerIntegrationTest {
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .value(user -> {
                     assertNotNull(user.getId());
                     assertEquals(testUser.getUsername(), user.getUsername());
                     assertEquals(testUser.getEmail(), user.getEmail());
                     assertEquals(testUser.getUserRole(), user.getUserRole());
+                    assertEquals(testUser.getEnabled(), user.getEnabled());
                 });
     }
 
     @Test
     void updateUser_WhenUserExists_ShouldUpdateSuccessfully() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
 
-        User updatedUser = User.builder()
-                .id(createdUser.getId())
+        assertNotNull(createdUser);
+
+        UpdateUserDTO updatedUser = UpdateUserDTO.builder()
                 .username("updated_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("updated_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .password("newpassword")
@@ -198,7 +199,7 @@ class UserControllerIntegrationTest {
                 .bodyValue(updatedUser)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .value(user -> {
                     assertEquals(updatedUser.getUsername(), user.getUsername());
                     assertEquals(updatedUser.getEmail(), user.getEmail());
@@ -209,8 +210,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void updateUser_WhenUserNotExists_ShouldReturnNotFound() {
-        User nonExistentUser = User.builder()
-                .id(999L)
+        UpdateUserDTO nonExistentUser = UpdateUserDTO.builder()
                 .username("nonexistent")
                 .email("nonexistent@example.com")
                 .password("password")
@@ -228,17 +228,19 @@ class UserControllerIntegrationTest {
 
     @Test
     void deleteUser_WhenUserExists_ShouldDeleteSuccessfully() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
+
+        assertNotNull(createdUser);
 
         webTestClient.delete()
                 .uri("/api/users/{id}", createdUser.getId())
@@ -261,23 +263,25 @@ class UserControllerIntegrationTest {
 
     @Test
     void getUserByUsername_WhenUserExists_ShouldReturnUser() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
+
+        assertNotNull(createdUser);
 
         webTestClient.get()
                 .uri("/api/users/username/{username}", createdUser.getUsername())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .value(user -> {
                     assertEquals(createdUser.getId(), user.getId());
                     assertEquals(createdUser.getUsername(), user.getUsername());
@@ -295,23 +299,25 @@ class UserControllerIntegrationTest {
 
     @Test
     void getUserByEmail_WhenUserExists_ShouldReturnUser() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
+
+        assertNotNull(createdUser);
 
         webTestClient.get()
                 .uri("/api/users/email/{email}", createdUser.getEmail())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .value(user -> {
                     assertEquals(createdUser.getId(), user.getId());
                     assertEquals(createdUser.getEmail(), user.getEmail());
@@ -340,7 +346,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void checkUsernameAvailability_WhenUsernameTaken_ShouldReturnFalse() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
         webTestClient.post()
                 .uri("/api/users")
@@ -371,7 +377,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void checkEmailAvailability_WhenEmailTaken_ShouldReturnFalse() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
         webTestClient.post()
                 .uri("/api/users")
@@ -390,7 +396,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void checkUsernameExists_WhenUsernameExists_ShouldReturnTrue() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
         webTestClient.post()
                 .uri("/api/users")
@@ -419,7 +425,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void checkEmailExists_WhenEmailExists_ShouldReturnTrue() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
         webTestClient.post()
                 .uri("/api/users")
@@ -448,7 +454,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void getUsersByRole_ShouldReturnUsersWithSpecificRole() {
-        User adminUser = User.builder()
+        CreateUserDTO adminUser = CreateUserDTO.builder()
                 .username("admin_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("admin_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .password("password")
@@ -456,7 +462,7 @@ class UserControllerIntegrationTest {
                 .enabled(true)
                 .build();
 
-        User regularUser = createUniqueUser();
+        CreateUserDTO regularUser = createUniqueUser();
 
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(adminUser).exchange();
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(regularUser).exchange();
@@ -465,7 +471,7 @@ class UserControllerIntegrationTest {
                 .uri("/api/users/role/{role}", "ADMIN")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(User.class)
+                .expectBodyList(UserDTO.class)
                 .value(users -> {
                     assertTrue(users.size() >= 1);
                     assertTrue(users.stream().allMatch(user -> user.getUserRole() == Role.ADMIN));
@@ -478,23 +484,25 @@ class UserControllerIntegrationTest {
                 .uri("/api/users/role/{role}", "ADMIN")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(User.class)
+                .expectBodyList(UserDTO.class)
                 .value(users -> assertTrue(users.isEmpty()));
     }
 
     @Test
     void checkUserExists_WhenUserExists_ShouldReturnTrue() {
-        User testUser = createUniqueUser();
+        CreateUserDTO testUser = createUniqueUser();
 
-        User createdUser = webTestClient.post()
+        UserDTO createdUser = webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(testUser)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(User.class)
+                .expectBody(UserDTO.class)
                 .returnResult()
                 .getResponseBody();
+
+        assertNotNull(createdUser);
 
         webTestClient.get()
                 .uri("/api/users/exists/{id}", createdUser.getId())
@@ -516,8 +524,8 @@ class UserControllerIntegrationTest {
 
     @Test
     void deleteAllUsers_ShouldRemoveAllUsers() {
-        User user1 = createUniqueUser();
-        User user2 = createUniqueUser();
+        CreateUserDTO user1 = createUniqueUser();
+        CreateUserDTO user2 = createUniqueUser();
 
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user1).exchange();
         webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user2).exchange();
@@ -537,11 +545,10 @@ class UserControllerIntegrationTest {
 
     @Test
     void createUser_WithInvalidData_ShouldReturnBadRequest() {
-        User invalidUser = User.builder()
-                .username("")
-                .email("invalid-email")
-                .password("")
-                .userRole(null)
+        CreateUserDTO invalidUser = CreateUserDTO.builder()
+                .username("")  // Invalid - empty username
+                .email("invalid-email")  // Invalid email format
+                .password("")  // Invalid - empty password
                 .build();
 
         webTestClient.post()
@@ -553,10 +560,10 @@ class UserControllerIntegrationTest {
     }
 
     @Test
-    void createUser_WithDuplicateUsername_ShouldWork() {
-        User user1 = createUniqueUser();
-        User user2 = User.builder()
-                .username(user1.getUsername())
+    void createUser_WithDuplicateUsername_ShouldReturnConflict() {
+        CreateUserDTO user1 = createUniqueUser();
+        CreateUserDTO user2 = CreateUserDTO.builder()
+                .username(user1.getUsername())  // Same username
                 .email("different@example.com")
                 .password("password")
                 .userRole(Role.USER)
@@ -570,10 +577,48 @@ class UserControllerIntegrationTest {
                 .exchange()
                 .expectStatus().isCreated();
 
+        // Теперь с GlobalExceptionHandler это должно вернуть CONFLICT
         webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(user2)
-                .exchange();
+                .exchange()
+                .expectStatus().is4xxClientError(); // 409 Conflict
+    }
+
+    @Test
+    void getTotalUserCount_ShouldReturnCorrectCount() {
+        CreateUserDTO user1 = createUniqueUser();
+        CreateUserDTO user2 = createUniqueUser();
+
+        webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user1).exchange();
+        webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(user2).exchange();
+
+        webTestClient.get()
+                .uri("/api/users/count")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.totalUsers").isEqualTo(2);
+    }
+
+    @Test
+    void getUserCountByRole_ShouldReturnCorrectCount() {
+        CreateUserDTO adminUser = CreateUserDTO.builder()
+                .username("admin_" + UUID.randomUUID().toString().substring(0, 8))
+                .email("admin_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
+                .password("password")
+                .userRole(Role.ADMIN)
+                .enabled(true)
+                .build();
+
+        webTestClient.post().uri("/api/users").contentType(MediaType.APPLICATION_JSON).bodyValue(adminUser).exchange();
+
+        webTestClient.get()
+                .uri("/api/users/count/role/{role}", "ADMIN")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.count").isEqualTo(1);
     }
 }

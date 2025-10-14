@@ -38,11 +38,20 @@ spring:
     auto: true
     proxy-target-class: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
 logging:
   level:
     org.springframework.r2dbc: DEBUG
     liquibase: DEBUG
-    by.losik.imageservice: DEBUG
+    by.losik.userservice: DEBUG
 
 server:
-  port: 8082
+  port: 8081
