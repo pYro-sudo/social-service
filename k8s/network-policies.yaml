@@ -381,12 +381,16 @@ spec:
       app: prometheus
   policyTypes:
     - Egress
+    - Ingress
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 9090
   egress:
     - to:
         - namespaceSelector: {}
       ports:
-        - protocol: TCP
-          port: 9090
         - protocol: TCP
           port: 8080
         - protocol: TCP
@@ -397,6 +401,23 @@ spec:
           port: 8083
         - protocol: TCP
           port: 8085
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-to-grafana
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 3000
 #---
 #apiVersion: networking.k8s.io/v1
 #kind: NetworkPolicy
