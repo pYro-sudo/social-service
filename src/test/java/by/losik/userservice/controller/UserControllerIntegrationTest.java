@@ -39,7 +39,8 @@ class UserControllerIntegrationTest {
 
     @Container
     static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7.2-alpine")
-            .withExposedPorts(6379);
+            .withExposedPorts(6379)
+            .withReuse(true);
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -546,9 +547,9 @@ class UserControllerIntegrationTest {
     @Test
     void createUser_WithInvalidData_ShouldReturnBadRequest() {
         CreateUserDTO invalidUser = CreateUserDTO.builder()
-                .username("")  // Invalid - empty username
-                .email("invalid-email")  // Invalid email format
-                .password("")  // Invalid - empty password
+                .username("")
+                .email("invalid-email")
+                .password("")
                 .build();
 
         webTestClient.post()
@@ -563,7 +564,7 @@ class UserControllerIntegrationTest {
     void createUser_WithDuplicateUsername_ShouldReturnConflict() {
         CreateUserDTO user1 = createUniqueUser();
         CreateUserDTO user2 = CreateUserDTO.builder()
-                .username(user1.getUsername())  // Same username
+                .username(user1.getUsername())
                 .email("different@example.com")
                 .password("password")
                 .userRole(Role.USER)
@@ -577,13 +578,12 @@ class UserControllerIntegrationTest {
                 .exchange()
                 .expectStatus().isCreated();
 
-        // Теперь с GlobalExceptionHandler это должно вернуть CONFLICT
         webTestClient.post()
                 .uri("/api/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(user2)
                 .exchange()
-                .expectStatus().is4xxClientError(); // 409 Conflict
+                .expectStatus().is4xxClientError();
     }
 
     @Test
