@@ -4,11 +4,11 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: spring_microservice_course_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-spring_microservice_course_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -17,19 +17,19 @@ services:
   redis:
     image: redis:7.2-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     networks:
       - app-network
 
   image-service:
     build: .
     ports:
-      - "8081:8081"
+      - "${APP_PORT:-8082}:8082"
     environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://postgres:5432/spring_microservice_course_db
-      - SPRING_R2DBC_USERNAME=postgres
-      - SPRING_R2DBC_PASSWORD=postgres
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/spring_microservice_course_db
+      - SPRING_R2DBC_URL=r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-spring_microservice_course_db}
+      - SPRING_R2DBC_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_R2DBC_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-spring_microservice_course_db}
       - SPRING_DATA_REDIS_HOST=redis
     depends_on:
       - postgres
@@ -42,5 +42,4 @@ volumes:
 
 networks:
   app-network:
-
     driver: bridge
