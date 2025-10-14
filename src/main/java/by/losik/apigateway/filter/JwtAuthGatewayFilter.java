@@ -2,6 +2,7 @@ package by.losik.apigateway.filter;
 
 import by.losik.apigateway.annotation.Loggable;
 import by.losik.apigateway.service.GatewayJwtService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -32,6 +33,7 @@ public class JwtAuthGatewayFilter extends AbstractGatewayFilterFactory<JwtAuthGa
             "/auth/user-info"
     );
 
+    @Autowired
     public JwtAuthGatewayFilter(GatewayJwtService jwtService) {
         super(Config.class);
         this.jwtService = jwtService;
@@ -83,6 +85,7 @@ public class JwtAuthGatewayFilter extends AbstractGatewayFilterFactory<JwtAuthGa
 
     private @Nullable String extractToken(@NonNull ServerHttpRequest request) {
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        assert authHeader != null;
         if (authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }

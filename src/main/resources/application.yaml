@@ -1,25 +1,25 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
-    name: api-gateway
+    name: ${SPRING_APPLICATION_NAME:api-gateway}
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   cloud:
     gateway:
       routes:
         - id: auth
-          uri: http://localhost:8080
+          uri: ${AUTH_SERVICE_URL:http://localhost:8080}
           predicates:
             - Path=/auth/**
           filters:
             - name: RateLimiterGatewayFilter
 
         - id: user-service
-          uri: http://localhost:8081
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
           predicates:
             - Path=/api/users/**
           filters:
@@ -27,7 +27,7 @@ spring:
             - name: RateLimiterGatewayFilter
 
         - id: image-service
-          uri: http://localhost:8082
+          uri: ${IMAGE_SERVICE_URL:http://localhost:8082}
           predicates:
             - Path=/api/images/**
           filters:
@@ -35,7 +35,7 @@ spring:
             - name: RateLimiterGatewayFilter
 
         - id: comment-like-service
-          uri: http://localhost:8083
+          uri: ${COMMENT_LIKE_SERVICE_URL:http://localhost:8083}
           predicates:
             - Path=/api/comments/**,/api/likes/**
           filters:
@@ -43,12 +43,21 @@ spring:
             - name: RateLimiterGatewayFilter
 
   jwt:
-    secret: "mySuperSecretKeyForJWTTokenGenerationAndValidationInSpringMicroserviceCourse2023"
+    secret: '${JWT_SECRET:mySuperSecretKeyForJWTTokenGenerationAndValidationInSpringMicroserviceCourse2023}'
 
 logging:
   level:
     org.springframework.cloud.gateway: DEBUG
     by.losik.apigateway: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: *
+  endpoint:
+    health:
+      show-details: always
 
 ---
 spring:
@@ -63,5 +72,5 @@ spring:
           lower-case-service-id: true
   data:
     redis:
-      host: redis-service
-      port: 6379
+      host: ${KUBERNETES_REDIS_HOST:redis.social-network-db}
+      port: ${REDIS_PORT:6379}
