@@ -14,7 +14,7 @@ app "quarkus-app" {
     hook {
       when    = "after"
       command = ["sh", "-c", <<EOT
-        docker pull pyrodocker1/social-activity-service:latest
+        docker pull pyrodocker1/social-activity-service:latest #for now it is latest, since i didn't tag anything
         docker pull pyrodocker1/api-gateway:latest
         docker pull pyrodocker1/comment-like-service:latest
         docker pull pyrodocker1/image-service:latest
@@ -24,8 +24,8 @@ app "quarkus-app" {
         docker pull confluentinc/cp-kafka:7.8.0
         docker pull confluentinc/cp-zookeeper:7.8.0
         docker pull mongo:6.0
-        docker pull prom/prometheus:latest
-        docker pull grafana/grafana:latest
+        docker pull prom/prometheus:v3.6.0
+        docker pull grafana/grafana:main
 
         if ! kind get clusters | grep -q desktop; then
           kind create cluster --name desktop
@@ -36,8 +36,8 @@ app "quarkus-app" {
         kind load docker-image confluentinc/cp-kafka:7.8.0 --name desktop
         kind load docker-image confluentinc/cp-zookeeper:7.8.0 --name desktop
         kind load docker-image mongo:6.0 --name desktop
-        kind load docker-image prom/prometheus:latest --name desktop
-        kind load docker-image grafana/grafana:latest --name desktop
+        kind load docker-image prom/prometheus:v3.6.0 --name desktop
+        kind load docker-image grafana/grafana:main --name desktop
         kind load docker-image pyrodocker1/social-activity-service:latest --name desktop
         kind load docker-image pyrodocker1/api-gateway:latest --name desktop
         kind load docker-image pyrodocker1/comment-like-service:latest --name desktop
