@@ -1,18 +1,14 @@
-project = "quarkus-app-1.0"
+project = "spring-boot-app-1.0"
 
 app "quarkus-app" {
   labels = {
-    "service" = "quarkus-app",
+    "service" = "spring-boot-app",
     "env"     = "dev"
   }
 
   build {
 
     use "exec" {
-    }
-
-    hook {
-      when    = "after"
       command = ["sh", "-c", <<EOT
         docker pull pyrodocker1/social-activity-service:latest #for now it is latest, since i didn't tag anything
         docker pull pyrodocker1/api-gateway:latest
