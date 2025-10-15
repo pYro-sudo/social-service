@@ -1,6 +1,6 @@
 spring:
   application:
-    name: comment-like-service
+    name: activity-service
 
   data:
     mongodb:
@@ -12,6 +12,24 @@ spring:
     consumer:
       group-id: activity-service-group
       auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    topics:
+      activity-events: activity-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:
@@ -19,4 +37,4 @@ logging:
     by.losik.activityservice: DEBUG
 
 server:
-  port: 8082
+  port: 8085

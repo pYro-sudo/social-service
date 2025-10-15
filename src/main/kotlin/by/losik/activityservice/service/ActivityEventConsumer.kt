@@ -1,65 +1,72 @@
 package by.losik.activityservice.service
 
-import by.losik.activityservice.entity.*
+import by.losik.activityservice.entity.CommentEvent
+import by.losik.activityservice.entity.LikeEvent
+import by.losik.activityservice.mapping.toActivityEvent
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Service
-import java.time.LocalDateTime
 
 @Service
 class ActivityEventConsumer(
-    private val activityEventService: ActivityEventService
+    private val activityEventService: ActivityEventService,
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(ActivityEventConsumer::class.java)
     }
 
-    @KafkaListener(topics = ["activity-events"], groupId = "activity-service-group")
-    fun consumeActivityEvent(event: Any) {
-        log.debug("Received activity event: {}", event)
+    @KafkaListener(
+        topics = ["\${kafka.topics.activity-events:activity-events}"],
+        groupId = "\${spring.kafka.consumer.group-id:activity-service-group}"
+    )
+    fun consumeLikeEvent(event: LikeEvent) {
+        log.info("RECEIVED LikeEvent: userId={}, imageId={}, type={}", event.userId, event.imageId, event.eventType)
+        try {
+            handleLikeEvent(event)
+            log.info("SUCCESSFULLY PROCESSED LikeEvent: userId={}", event.userId)
+        } catch (e: Exception) {
+            log.error("FAILED to process LikeEvent: {}", event, e)
+            throw e
+        }
+    }
 
-        when (event) {
-            is LikeEvent -> handleLikeEvent(event)
-            is CommentEvent -> handleCommentEvent(event)
-            else -> log.warn("Unknown event type: {}", event::class.java.simpleName)
+    @KafkaListener(
+        topics = ["\${kafka.topics.activity-events:activity-events}"],
+        groupId = "\${spring.kafka.consumer.group-id:activity-service-group}"
+    )
+    fun consumeCommentEvent(event: CommentEvent) {
+        log.info("RECEIVED CommentEvent: userId={}, imageId={}, content={}", event.userId, event.imageId, event.content)
+        try {
+            handleCommentEvent(event)
+            log.info("SUCCESSFULLY PROCESSED CommentEvent: userId={}", event.userId)
+        } catch (e: Exception) {
+            log.error("FAILED to process CommentEvent: {}", event, e)
+            throw e
         }
     }
 
     private fun handleLikeEvent(likeEvent: LikeEvent) {
-        val activityEvent = ActivityEvent(
-            userId = likeEvent.userId,
-            imageId = likeEvent.imageId,
-            type = likeEvent.eventType,
-            createdAt = LocalDateTime.now()
-        )
+        val activityEvent = likeEvent.toActivityEvent()
 
         activityEventService.save(activityEvent)
             .doOnSuccess { savedEvent ->
-                log.debug("Successfully saved like activity event: {}", savedEvent)
+                log.info("SUCCESSFULLY saved like activity event: {}", savedEvent)
             }
             .doOnError { error ->
-                log.error("Failed to save like activity event: {}", likeEvent, error)
+                log.error("FAILED to save like activity event: {}", likeEvent, error)
             }
-            .subscribe()
     }
 
     private fun handleCommentEvent(commentEvent: CommentEvent) {
-        val activityEvent = ActivityEvent(
-            userId = commentEvent.userId,
-            imageId = commentEvent.imageId,
-            type = commentEvent.eventType,
-            createdAt = LocalDateTime.now(),
-            content = commentEvent.content
-        )
+        val activityEvent = commentEvent.toActivityEvent()
 
         activityEventService.save(activityEvent)
             .doOnSuccess { savedEvent ->
-                log.debug("Successfully saved comment activity event: {}", savedEvent)
+                log.info("SUCCESSFULLY saved comment activity event: {}", savedEvent)
             }
             .doOnError { error ->
-                log.error("Failed to save comment activity event: {}", commentEvent, error)
+                log.error("FAILED to save comment activity event: {}", commentEvent, error)
             }
-            .subscribe()
     }
 }

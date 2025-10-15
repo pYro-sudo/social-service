@@ -8,6 +8,6 @@ import org.springframework.shell.command.annotation.CommandScan
 @CommandScan
 class ActivityServiceApplication
 
-fun main(args: Array<String>) {
-    runApplication<ActivityServiceApplication>(*args)
+    fun main(args: Array<String>) {
+        runApplication<ActivityServiceApplication>(*args)
 }
