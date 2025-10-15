@@ -55,3 +55,7 @@ logging:
 
 server:
   port: ${SERVER_PORT:8081}
+
+springdoc:
+  api-docs:
+    path: /api-docs
