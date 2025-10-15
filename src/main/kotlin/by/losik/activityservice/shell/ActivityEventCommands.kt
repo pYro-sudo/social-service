@@ -158,11 +158,11 @@ class ActivityEventCommands(
     @ShellMethod(key = ["activity delete user", "act del user"], value = "Delete all activities for user")
     fun deleteUserActivities(@ShellOption(help = "User ID") userId: Long): String {
         return activityEventService.deleteByUserId(userId)
-            .then(Mono.just("✅ All activities for user $userId have been deleted"))
+            .then(Mono.just("All activities for user $userId have been deleted"))
             .onErrorResume { error ->
                 when (error) {
                     is NotFoundException -> Mono.just("No activities found for user ID: $userId")
-                    else -> Mono.just("❌ Error deleting activities for user $userId: ${error.message}")
+                    else -> Mono.just("Error deleting activities for user $userId: ${error.message}")
                 }
             }
             .block() ?: "Operation completed"
@@ -171,11 +171,11 @@ class ActivityEventCommands(
     @ShellMethod(key = ["activity delete image", "act del img"], value = "Delete all activities for image")
     fun deleteImageActivities(@ShellOption(help = "Image ID") imageId: Long): String {
         return activityEventService.deleteByImageId(imageId)
-            .then(Mono.just("✅ All activities for image $imageId have been deleted"))
+            .then(Mono.just("All activities for image $imageId have been deleted"))
             .onErrorResume { error ->
                 when (error) {
                     is NotFoundException -> Mono.just("No activities found for image ID: $imageId")
-                    else -> Mono.just("❌ Error deleting activities for image $imageId: ${error.message}")
+                    else -> Mono.just("Error deleting activities for image $imageId: ${error.message}")
                 }
             }
             .block() ?: "Operation completed"
@@ -192,7 +192,7 @@ class ActivityEventCommands(
     fun getTotalCount(): String {
         return activityEventService.findAll()
             .count()
-            .map { count -> "📊 Total activities: $count" }
+            .map { count -> "Total activities: $count" }
             .onErrorResume { error ->
                 Mono.just("Error counting activities: ${error.message}")
             }
@@ -247,7 +247,7 @@ class ActivityEventCommands(
 
     private fun formatSingleActivity(event: ActivityEvent): String {
         return """
-            📋 Activity Details:
+            Activity Details:
             • ID: ${event.id}
             • User ID: ${event.userId}
             • Image ID: ${event.imageId}
@@ -271,7 +271,7 @@ class ActivityEventCommands(
         }.toTypedArray()
 
         val table = buildTable(headers, data)
-        return "$table\n\n📈 Total activities: $total"
+        return "$table\n\nTotal activities: $total"
     }
 
     private fun buildTable(headers: Array<String>, data: Array<Array<String>>): String {
