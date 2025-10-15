@@ -21,7 +21,7 @@ services:
     networks:
       - app-network
 
-  image-service:
+  user-service:
     build: .
     ports:
       - "${APP_PORT:8082}:8082"
@@ -42,4 +42,5 @@ volumes:
 
 networks:
   app-network:
+
     driver: bridge
