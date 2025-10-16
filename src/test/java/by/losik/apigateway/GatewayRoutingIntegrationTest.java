@@ -45,6 +45,12 @@ class GatewayRoutingIntegrationTest {
             .withCommand("-serverPort 8080 -logLevel INFO")
             .waitingFor(Wait.forLogMessage(".*8080 started on port: 8080.*", 1));
 
+    @Container
+    static GenericContainer<?> mockActivityService = new GenericContainer<>("mockserver/mockserver:5.15.0")
+            .withExposedPorts(8080)
+            .withCommand("-serverPort 8080 -logLevel INFO")
+            .waitingFor(Wait.forLogMessage(".*8085 started on port: 8085.*", 1));
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.cloud.gateway.discovery.locator.enabled", () -> false);
@@ -71,6 +77,12 @@ class GatewayRoutingIntegrationTest {
                 () -> "http://" + mockCommentLikeService.getHost() + ":" + mockCommentLikeService.getFirstMappedPort());
         registry.add("spring.cloud.gateway.routes[3].predicates[0]", () -> "Path=/api/comments/**,/api/likes/**");
         registry.add("spring.cloud.gateway.routes[3].filters[0]", () -> "JwtAuthGatewayFilter");
+
+        registry.add("spring.cloud.gateway.routes[4].id", () -> "activity-service");
+        registry.add("spring.cloud.gateway.routes[4].uri",
+                () -> "http://" + mockActivityService.getHost() + ":" + mockActivityService.getFirstMappedPort());
+        registry.add("spring.cloud.gateway.routes[4].predicates[0]", () -> "Path=/api/activity/**");
+        registry.add("spring.cloud.gateway.routes[4].filters[0]", () -> "JwtAuthGatewayFilter");
     }
 
     @Test
@@ -112,6 +124,15 @@ class GatewayRoutingIntegrationTest {
     void likeServiceRouting_ShouldWork() {
         webTestClient.get()
                 .uri("/api/likes")
+                .header("Authorization", "Bearer mock-jwt-token-for-testing")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void activityServiceRouting_ShouldWork() {
+        webTestClient.get()
+                .uri("/api/activity")
                 .header("Authorization", "Bearer mock-jwt-token-for-testing")
                 .exchange()
                 .expectStatus().isUnauthorized();
