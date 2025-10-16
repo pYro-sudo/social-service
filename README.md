@@ -32,6 +32,7 @@
 - **Spring Data Redis** - кэширование и распределенные данные
 - **Spring Cloud Gateway** - API Gateway
 - **Spring Kafka** - обработка событий
+- **Spring Shell** - для cli(activity-service)
 - **Liquibase** - управление миграциями базы данных
 
 ### Базы данных и кэширование
