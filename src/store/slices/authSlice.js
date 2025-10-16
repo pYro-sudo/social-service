@@ -7,9 +7,10 @@ export const loginUser = createAsyncThunk(
     async (credentials, { rejectWithValue }) => {
         try {
             const response = await authAPI.login(credentials);
+            // Предполагаем, что бэкенд возвращает token и user
             return response.data;
         } catch (error) {
-            return rejectWithValue(error.response?.data || 'Login failed');
+            return rejectWithValue(error.response?.data?.message || 'Login failed');
         }
     }
 );
@@ -21,7 +22,7 @@ export const registerUser = createAsyncThunk(
             const response = await authAPI.register(userData);
             return response.data;
         } catch (error) {
-            return rejectWithValue(error.response?.data || 'Registration failed');
+            return rejectWithValue(error.response?.data?.message || 'Registration failed');
         }
     }
 );
@@ -34,6 +35,18 @@ export const validateToken = createAsyncThunk(
             return response.data;
         } catch (error) {
             return rejectWithValue('Token validation failed');
+        }
+    }
+);
+
+export const logoutUser = createAsyncThunk(
+    'auth/logout',
+    async (_, { rejectWithValue }) => {
+        try {
+            await authAPI.logout();
+            return true;
+        } catch (error) {
+            return rejectWithValue('Logout failed');
         }
     }
 );
@@ -54,7 +67,6 @@ const authSlice = createSlice({
             state.isAuthenticated = false;
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            authAPI.logout();
         },
         clearError: (state) => {
             state.error = null;
@@ -70,10 +82,25 @@ const authSlice = createSlice({
             .addCase(loginUser.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.isAuthenticated = true;
-                state.token = action.payload.token;
-                state.user = action.payload.user;
-                localStorage.setItem('token', action.payload.token);
-                localStorage.setItem('user', JSON.stringify(action.payload.user));
+
+                // Адаптируемся под структуру ответа от бэкенда
+                const response = action.payload;
+                state.token = response.token || response.jwt;
+
+                // Если бэкенд возвращает пользователя
+                if (response.user) {
+                    state.user = response.user;
+                } else {
+                    // Или создаем пользователя из данных
+                    state.user = {
+                        id: response.userId,
+                        username: response.username,
+                        email: response.email
+                    };
+                }
+
+                localStorage.setItem('token', state.token);
+                localStorage.setItem('user', JSON.stringify(state.user));
             })
             .addCase(loginUser.rejected, (state, action) => {
                 state.isLoading = false;
@@ -88,23 +115,32 @@ const authSlice = createSlice({
                 state.isLoading = false;
                 // После регистрации автоматически логиним пользователя
                 state.isAuthenticated = true;
-                state.token = action.payload.token;
-                state.user = action.payload.user;
-                localStorage.setItem('token', action.payload.token);
-                localStorage.setItem('user', JSON.stringify(action.payload.user));
+
+                const response = action.payload;
+                state.token = response.token || response.jwt;
+
+                if (response.user) {
+                    state.user = response.user;
+                } else {
+                    state.user = {
+                        id: response.userId,
+                        username: response.username,
+                        email: response.email
+                    };
+                }
+
+                localStorage.setItem('token', state.token);
+                localStorage.setItem('user', JSON.stringify(state.user));
             })
             .addCase(registerUser.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload;
             })
-            // Validate Token
-            .addCase(validateToken.fulfilled, (state) => {
-                state.isAuthenticated = true;
-            })
-            .addCase(validateToken.rejected, (state) => {
-                state.isAuthenticated = false;
-                state.token = null;
+            // Logout
+            .addCase(logoutUser.fulfilled, (state) => {
                 state.user = null;
+                state.token = null;
+                state.isAuthenticated = false;
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
             });

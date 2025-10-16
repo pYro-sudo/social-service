@@ -1,25 +1,26 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8080'; // API Gateway
 
 const api = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,
 });
 
-// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://social-network.local/api';
-
-// export const api = axios.create({
-//   baseURL: API_BASE_URL,
-//   headers: {
-//     'Content-Type': 'application/json',
-//   },
-// });
+export const authAPI = {
+    login: (credentials) => api.post('/auth/generate-token', credentials),
+    register: (userData) => api.post('/auth/add-new-user', userData),
+    validateToken: () => api.get('/auth/validate-token'),
+    logout: () => api.post('/auth/logout'),
+    getUserInfo: () => api.get('/auth/user-info'),
+};
 
 export const imageAPI = {
-    getAllImages: (page = 0, size = 12) => api.get(`/api/images?page=${page}&size=${size}`),
+    getAllImages: (page = 0, size = 12) =>
+        api.get(`/api/images?page=${page}&size=${size}`),
 
-    getUserImages: (page = 0, size = 12) => api.get(`/api/images/my?page=${page}&size=${size}`),
+    getUserImages: (userId, page = 0, size = 12) =>
+        api.get(`/api/images/user/${userId}?page=${page}&size=${size}`),
 
     uploadImage: (formData) => api.post('/api/images/upload', formData, {
         headers: {
@@ -28,6 +29,28 @@ export const imageAPI = {
     }),
 
     deleteImage: (imageId) => api.delete(`/api/images/${imageId}`),
+
+    getImageById: (imageId) => api.get(`/api/images/${imageId}`),
+};
+
+// Comments API
+export const commentAPI = {
+    getImageComments: (imageId) => api.get(`/api/comments/image/${imageId}`),
+    createComment: (commentData) => api.post('/api/comments', commentData),
+    deleteComment: (commentId) => api.delete(`/api/comments/${commentId}`),
+    getCommentById: (commentId) => api.get(`/api/comments/${commentId}`),
+};
+
+// Likes API
+export const likeAPI = {
+    toggleLike: (imageId, userId) => api.post(`/api/likes/images/${imageId}/likes`, null, {
+        headers: {
+            'X-User-Id': userId
+        }
+    }),
+    getImageLikes: (imageId) => api.get(`/api/likes/image/${imageId}/count`),
+    checkLike: (userId, imageId) => api.get(`/api/likes/check?userId=${userId}&imageId=${imageId}`),
+    getImageLikesList: (imageId) => api.get(`/api/likes/image/${imageId}`),
 };
 
 api.interceptors.request.use(
@@ -38,9 +61,7 @@ api.interceptors.request.use(
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
 api.interceptors.response.use(
@@ -54,17 +75,5 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
-
-export const authAPI = {
-    login: (credentials) => api.post('/auth/generate-token', credentials),
-    register: (userData) => api.post('/auth/add-new-user', userData),
-    validateToken: () => api.post('/auth/validate-token'),
-    logout: () => api.post('/auth/logout'),
-};
-
-export const userAPI = {
-    getProfile: () => api.get('/api/users/profile'),
-};
-
 
 export default api;

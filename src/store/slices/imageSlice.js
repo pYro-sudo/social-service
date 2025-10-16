@@ -16,9 +16,9 @@ export const fetchAllImages = createAsyncThunk(
 
 export const fetchUserImages = createAsyncThunk(
     'images/fetchUser',
-    async ({ page = 0, size = 12 } = {}, { rejectWithValue }) => {
+    async ({ userId, page = 0, size = 12 } = {}, { rejectWithValue }) => {
         try {
-            const response = await imageAPI.getUserImages(page, size);
+            const response = await imageAPI.getUserImages(userId, page, size);
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data || 'Failed to fetch user images');
