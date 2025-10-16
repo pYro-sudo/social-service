@@ -22,6 +22,7 @@
 - **MongoDB** - хранилище для данных активности
 - **Redis** - кэширование и сессии
 - **Kafka** - асинхронная коммуникация между сервисами
+- **LocalStack** - AWS S3 эмуляция
 
 ### Бэкенд
 - **Spring Boot 3** - основной фреймворк
@@ -41,7 +42,6 @@
 ### Инфраструктура
 - **Docker/Podman & Kubernetes** - контейнеризация и оркестрация
 - **Kafka & Zookeeper** - message broker для событий
-- **LocalStack** - AWS S3 эмуляция
 - **Nginx Ingress Controller** - маршрутизация в Kubernetes
 - **Prometheus+Grafana** - для метрик
 - **Waypoint** - деплой
