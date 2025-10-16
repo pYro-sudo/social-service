@@ -167,6 +167,7 @@ services:
       - image-service
       - user-service
       - comment-like-service
+      - activity-service
     networks:
       - app-network
 
