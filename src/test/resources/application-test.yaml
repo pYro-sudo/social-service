@@ -1,0 +1,29 @@
+spring:
+  data:
+    mongodb:
+      auto-index-creation: true
+  kafka:
+    bootstrap-servers: ${spring.kafka.bootstrap-servers}
+    consumer:
+      auto-offset-reset: earliest
+      group-id: test-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "by.losik.activityservice.entity,by.losik.commentlikeservice.entity"
+        spring.json.value.default.type: "by.losik.activityservice.entity.ActivityEvent"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    listener:
+      missing-topics-fatal: false
+      auto-startup: true
+
+kafka:
+  topics:
+    activity-events: test-activity-events
+
+logging:
+  level:
+    by.losik.activityservice: DEBUG
+    org.springframework.kafka: DEBUG
