@@ -31,7 +31,6 @@ class ActivityEventControllerTest : AbstractIntegrationTest() {
     fun setup() {
         webTestClient = WebTestClient.bindToController(ActivityEventController(activityEventService)).build()
 
-        // Cleanup before each test
         activityEventService.findAll()
             .flatMap { activityEventService.deleteByUserId(it.userId) }
     }
