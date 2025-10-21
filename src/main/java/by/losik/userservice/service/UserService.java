@@ -24,6 +24,7 @@ import reactor.core.publisher.Mono;
 public class UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
 
     public Flux<UserDTO> findAll() {
         return userRepository.findAll()
@@ -54,11 +55,13 @@ public class UserService {
     @CacheEvict(value = "users", allEntries = true)
     public Mono<UserDTO> save(CreateUserDTO createUserDTO) {
         return checkUserExists(createUserDTO.getUsername(), createUserDTO.getEmail())
-                .then(Mono.defer(() -> {
+                .then(passwordEncoder.encode(createUserDTO.getPassword()))
+                .flatMap(encodedPassword -> {
                     User user = userMapper.toEntity(createUserDTO);
+                    user.setPassword(encodedPassword);
                     return userRepository.save(user)
                             .map(userMapper::toDTO);
-                }));
+                });
     }
 
     @CacheEvict(value = "users", key = "#id")
@@ -73,8 +76,7 @@ public class UserService {
                                     if (exists) {
                                         return Mono.error(new UserAlreadyExistsException("username", updateUserDTO.getUsername()));
                                     }
-                                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
-                                    return userRepository.save(existingUser);
+                                    return updateUserWithPassword(existingUser, updateUserDTO);
                                 });
                     }
 
@@ -85,15 +87,27 @@ public class UserService {
                                     if (exists) {
                                         return Mono.error(new UserAlreadyExistsException("email", updateUserDTO.getEmail()));
                                     }
-                                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
-                                    return userRepository.save(existingUser);
+                                    return updateUserWithPassword(existingUser, updateUserDTO);
                                 });
                     }
 
-                    userMapper.updateUserFromDTO(updateUserDTO, existingUser);
-                    return userRepository.save(existingUser);
+                    return updateUserWithPassword(existingUser, updateUserDTO);
                 })
                 .map(userMapper::toDTO);
+    }
+
+    private Mono<User> updateUserWithPassword(User existingUser, UpdateUserDTO updateUserDTO) {
+        if (updateUserDTO.getPassword() != null && !updateUserDTO.getPassword().isEmpty()) {
+            return passwordEncoder.encode(updateUserDTO.getPassword())
+                    .flatMap(encodedPassword -> {
+                        userMapper.updateUserFromDTO(updateUserDTO, existingUser);
+                        existingUser.setPassword(encodedPassword);
+                        return userRepository.save(existingUser);
+                    });
+        } else {
+            userMapper.updateUserFromDTO(updateUserDTO, existingUser);
+            return userRepository.save(existingUser);
+        }
     }
 
     @CacheEvict(value = "users", key = "#id")
