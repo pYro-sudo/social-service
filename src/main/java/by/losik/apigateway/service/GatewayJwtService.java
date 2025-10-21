@@ -2,7 +2,6 @@ package by.losik.apigateway.service;
 
 import by.losik.apigateway.annotation.Loggable;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -42,8 +41,7 @@ public class GatewayJwtService {
     public Mono<Boolean> validateToken(String token) {
         return Mono.fromCallable(() -> {
                     try {
-                        Claims claims = extractAllClaims(token);
-                        return claims;
+                        return extractAllClaims(token);
                     } catch (Exception e) {
                         return null;
                     }
