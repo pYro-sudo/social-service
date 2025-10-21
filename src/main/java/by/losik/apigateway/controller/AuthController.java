@@ -52,7 +52,15 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public Mono<ResponseEntity<Map<String, String>>> logout(@NonNull ServerHttpResponse response) {
+    public Mono<ResponseEntity<Map<String, String>>> logout(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @NonNull ServerHttpResponse response) {
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            jwtService.revokeToken(token);
+        }
+
         ResponseCookie cookie = ResponseCookie.from("JWT", "")
                 .httpOnly(true)
                 .secure(false)
