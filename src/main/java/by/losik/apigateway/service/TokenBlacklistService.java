@@ -2,6 +2,7 @@ package by.losik.apigateway.service;
 
 import by.losik.apigateway.annotation.Loggable;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -15,7 +16,8 @@ import java.time.Instant;
 public class TokenBlacklistService {
 
     private final ReactiveRedisTemplate<String, String> redisTemplate;
-    private static final String BLACKLIST_PREFIX = "blacklist:";
+    @Value("${spring.data.redis.blacklist-prefix}")
+    private String BLACKLIST_PREFIX;
 
     public Mono<Boolean> isTokenBlacklisted(String token) {
         String key = BLACKLIST_PREFIX + token;
