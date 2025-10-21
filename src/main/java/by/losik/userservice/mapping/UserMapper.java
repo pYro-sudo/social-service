@@ -15,12 +15,15 @@ public interface UserMapper {
 
     User toEntity(UserDTO userDTO);
 
+    @Mapping(target = "password", ignore = true)
     User toEntity(CreateUserDTO createUserDTO);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "password", ignore = true)
     void updateUserFromDTO(UpdateUserDTO updateUserDTO, @MappingTarget User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "password", ignore = true)
     void updateUserFromDTO(UserDTO userDTO, @MappingTarget User user);
 
     @AfterMapping
