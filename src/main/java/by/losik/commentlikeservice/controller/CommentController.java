@@ -1,7 +1,11 @@
 package by.losik.commentlikeservice.controller;
 
 import by.losik.commentlikeservice.annotation.Loggable;
-import by.losik.commentlikeservice.dto.*;
+import by.losik.commentlikeservice.dto.ApiResponse;
+import by.losik.commentlikeservice.dto.CommentCountResponse;
+import by.losik.commentlikeservice.dto.CommentRequest;
+import by.losik.commentlikeservice.dto.CommentResponse;
+import by.losik.commentlikeservice.dto.UpdateContentRequest;
 import by.losik.commentlikeservice.entity.Comment;
 import by.losik.commentlikeservice.mapping.CommentMapper;
 import by.losik.commentlikeservice.service.CommentService;
@@ -15,7 +19,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -688,4 +702,5 @@ public class CommentController {
                         Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                 .body(ApiResponse.error(error.getMessage()))));
     }
+
 }
