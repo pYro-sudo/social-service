@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: user-service
+
+  r2dbc:
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+    username: ${SPRING_R2DBC_USERNAME:${POSTGRES_USER:postgres}}
+    password: ${SPRING_R2DBC_PASSWORD:${POSTGRES_PASSWORD:postgres}}
+    pool:
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+    default-schema: user_schema
+    user: ${spring.r2dbc.username}
+    password: ${spring.r2dbc.password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+
+  data:
+    r2dbc:
+      repositories:
+        enabled: true
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ""
+      database: 0
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+    username: ${spring.r2dbc.username}
+    password: ${spring.r2dbc.password}
+    driver-class-name: org.postgresql.Driver
+
+  aop:
+    auto: true
+    proxy-target-class: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.r2dbc: DEBUG
+    liquibase: DEBUG
+    by.losik.userservice: DEBUG
+
+server:
+  port: ${SERVER_PORT:8081}
+
+springdoc:
+  api-docs:
+    path: /api-docs
