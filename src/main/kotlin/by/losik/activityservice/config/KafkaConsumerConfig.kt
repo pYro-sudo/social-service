@@ -19,11 +19,14 @@ class KafkaConsumerConfig {
     @Value("\${spring.kafka.bootstrap-servers}")
     private lateinit var bootstrapServers: String
 
+    @Value("\${spring.kafka.consumer.group-id}")
+    private lateinit var groupIdConfig: String
+
     @Bean
     fun consumerFactory(): ConsumerFactory<String, Any> {
         val props = HashMap<String, Any>()
         props[ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
-        props[ConsumerConfig.GROUP_ID_CONFIG] = "activity-service-group"
+        props[ConsumerConfig.GROUP_ID_CONFIG] = groupIdConfig
         props[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = ErrorHandlingDeserializer::class.java
         props[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = ErrorHandlingDeserializer::class.java
         props[ConsumerConfig.AUTO_OFFSET_RESET_CONFIG] = "earliest"
@@ -32,7 +35,7 @@ class KafkaConsumerConfig {
         props[ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS] = JsonDeserializer::class.java
         props[JsonDeserializer.TRUSTED_PACKAGES] = "by.losik.activityservice.entity,by.losik.commentlikeservice.entity"
         props[JsonDeserializer.USE_TYPE_INFO_HEADERS] = false
-        props[JsonDeserializer.VALUE_DEFAULT_TYPE] = "com.fasterxml.jackson.databind.JsonNode" // Принимаем любой JSON
+        props[JsonDeserializer.VALUE_DEFAULT_TYPE] = "com.fasterxml.jackson.databind.JsonNode"
 
         return DefaultKafkaConsumerFactory(props)
     }
