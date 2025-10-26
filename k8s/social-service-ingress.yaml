@@ -24,20 +24,20 @@ spec:
     - host: monitor.social-network.local
       http:
         paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: grafana
-                  port:
-                    number: 3000
-            - path: /prometheus
-              pathType: Prefix
-              backend:
-                service:
-                  name: prometheus
-                  port:
-                    number: 9090
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
     - host: social-network.local
       http:
         paths:
@@ -72,7 +72,7 @@ spec:
 #spec:
 #  ingressClassName: nginx
 #  rules:
-#    - host: social-network.local
+#    - host: social-network-front.local
 #      http:
 #        paths:
 #          - path: /
