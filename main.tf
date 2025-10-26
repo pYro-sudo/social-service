@@ -82,12 +82,12 @@ resource "kubectl_manifest" "postgres" {
 
 resource "kubectl_manifest" "mongodb" {
   yaml_body = file("${path.module}/k8s/mongodb-ss.yaml")
-  depends_on = [kubectl_manifest.namespaces]
+  depends_on = [kubectl_manifest.namespaces, kubernetes_secret.mongodb_credentials]
 }
 
 resource "kubectl_manifest" "redis" {
   yaml_body = file("${path.module}/k8s/redis-deployment.yaml")
-  depends_on = [kubectl_manifest.namespaces]
+  depends_on = [kubectl_manifest.namespaces, kubernetes_secret.redis_credentials]
 }
 
 resource "kubectl_manifest" "kafka" {
@@ -105,7 +105,8 @@ resource "kubectl_manifest" "user_service" {
   depends_on = [
     kubectl_manifest.postgres,
     kubectl_manifest.redis,
-    kubectl_manifest.service_accounts
+    kubectl_manifest.service_accounts,
+    kubernetes_secret.redis_credentials
   ]
 }
 
@@ -115,7 +116,8 @@ resource "kubectl_manifest" "image_service" {
     kubectl_manifest.postgres,
     kubectl_manifest.redis,
     kubectl_manifest.localstack,
-    kubectl_manifest.service_accounts
+    kubectl_manifest.service_accounts,
+    kubernetes_secret.redis_credentials
   ]
 }
 
@@ -125,7 +127,8 @@ resource "kubectl_manifest" "comment_like_service" {
     kubectl_manifest.postgres,
     kubectl_manifest.redis,
     kubectl_manifest.kafka,
-    kubectl_manifest.service_accounts
+    kubectl_manifest.service_accounts,
+    kubernetes_secret.redis_credentials
   ]
 }
 
@@ -134,7 +137,8 @@ resource "kubectl_manifest" "activity_service" {
   depends_on = [
     kubectl_manifest.mongodb,
     kubectl_manifest.kafka,
-    kubectl_manifest.service_accounts
+    kubectl_manifest.service_accounts,
+    kubernetes_secret.mongodb_credentials
   ]
 }
 
@@ -145,7 +149,8 @@ resource "kubectl_manifest" "api_gateway" {
     kubectl_manifest.image_service,
     kubectl_manifest.comment_like_service,
     kubectl_manifest.activity_service,
-    kubectl_manifest.service_accounts
+    kubectl_manifest.service_accounts,
+    kubernetes_secret.redis_credentials
   ]
 }
 

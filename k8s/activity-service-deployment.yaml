@@ -29,8 +29,24 @@ spec:
               memory: "512Mi"
               cpu: "500m"
           env:
-            - name: SPRING_DATA_MONGODB_URI
-              value: "mongodb://mongodb.social-network-db:27017/activity_db"
+            - name: SPRING_DATA_MONGODB_HOST
+              value: "mongodb.social-network-db"
+            - name: SPRING_DATA_MONGODB_PORT
+              value: "27017"
+            - name: SPRING_DATA_MONGODB_DATABASE
+              value: "activity_db"
+            - name: SPRING_DATA_MONGODB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: username
+            - name: SPRING_DATA_MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: password
+            - name: SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE
+              value: "admin"
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "kafka.social-network-db:9092"
           livenessProbe:

@@ -18,6 +18,12 @@ spec:
       containers:
         - name: redis
           image: redis:7.2-alpine
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
           ports:
             - containerPort: 6379
           livenessProbe:

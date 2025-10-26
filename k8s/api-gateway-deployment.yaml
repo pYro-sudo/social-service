@@ -39,6 +39,13 @@ spec:
               value: "http://activity-service.social-network-activities:8085"
             - name: SPRING_DATA_REDIS_HOST
               value: "redis.social-network-db"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
           livenessProbe:
             httpGet:
               path: /actuator/health

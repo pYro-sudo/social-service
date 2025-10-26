@@ -33,6 +33,11 @@ spec:
               value: "r2dbc:postgresql://postgres.social-network-db:5432/spring_microservice_course_db"
             - name: SPRING_DATA_REDIS_HOST
               value: "redis.social-network-db"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
             - name: SPRING_CLOUD_AWS_S3_ENDPOINT
               value: "http://localstack.social-network-db:4566"
             - name: SPRING_R2DBC_USERNAME

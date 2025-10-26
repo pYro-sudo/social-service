@@ -43,6 +43,13 @@ spec:
               value: "r2dbc:postgresql://postgres.social-network-db:5432/spring_microservice_course_db"
             - name: SPRING_DATA_REDIS_HOST
               value: "redis.social-network-db"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "kafka.social-network-db:9092"
           livenessProbe:

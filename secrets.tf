@@ -3,6 +3,16 @@ resource "random_password" "postgres_password" {
   special = false
 }
 
+resource "random_password" "redis_password" {
+  length = 16
+  special = false
+}
+
+resource "random_password" "mongodb_password" {
+  length = 16
+  special = false
+}
+
 resource "kubernetes_secret" "postgres_credentials" {
   metadata {
     name      = "postgres-credentials"
@@ -24,7 +34,7 @@ resource "kubernetes_secret" "redis_credentials" {
   }
 
   data = {
-    password = ""
+    password = random_password.redis_password.result
   }
 
   depends_on = [kubectl_manifest.namespaces]
@@ -37,8 +47,9 @@ resource "kubernetes_secret" "mongodb_credentials" {
   }
 
   data = {
-    database = "activity_db"
-  }
+    username = "admin"
+    password = random_password.mongodb_password.result
+    database = "activity_db"  }
 
   depends_on = [kubectl_manifest.namespaces]
 }
