@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: image-service
+
+  r2dbc:
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+    username: ${SPRING_R2DBC_USERNAME:${POSTGRES_USER:postgres}}
+    password: ${SPRING_R2DBC_PASSWORD:${POSTGRES_PASSWORD:postgres}}
+    pool:
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+    default-schema: gallery
+    user: ${spring.r2dbc.username}
+    password: ${spring.r2dbc.password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+
+  data:
+    r2dbc:
+      repositories:
+        enabled: true
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${REDIS_PORT:6379}
+      password: ""
+      database: 0
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_microservice_course_db}}
+    username: ${spring.r2dbc.username}
+    password: ${spring.r2dbc.password}
+    driver-class-name: org.postgresql.Driver
+
+  aop:
+    auto: true
+    proxy-target-class: true
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}}
+    producer:
+      retries: 3
+    topic: activity-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.r2dbc: DEBUG
+    liquibase: INFO
+    by.losik.imageservice: DEBUG
+
+server:
+  port: ${IMAGE_SERVICE_PORT:8083}
+
+springdoc:
+  api-docs:
+    path: /api-docs
