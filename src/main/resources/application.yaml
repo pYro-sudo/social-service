@@ -1,0 +1,90 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:api-gateway}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      blacklist-prefix: 'blacklist:'
+
+  cloud:
+    gateway:
+      routes:
+        - id: auth
+          uri: ${AUTH_SERVICE_URL:http://localhost:8080}
+          predicates:
+            - Path=/auth/**
+          filters:
+            - name: RateLimiterGatewayFilter
+
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
+
+        - id: image-service
+          uri: ${IMAGE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/images/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
+
+        - id: comment-like-service
+          uri: ${COMMENT_LIKE_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/comments/**,/api/likes/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
+
+        - id: activity-service
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/activity/**
+          filters:
+            - name: JwtAuthGatewayFilter
+            - name: RateLimiterGatewayFilter
+
+  jwt:
+    secret: '${JWT_SECRET:mySuperSecretKeyForJWTTokenGenerationAndValidationInSpringMicroserviceCourse2025}'
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    by.losik.apigateway: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
+---
+spring:
+  config:
+    activate:
+      on-profile: kubernetes
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+  data:
+    redis:
+      host: ${KUBERNETES_REDIS_HOST:redis.social-network-db}
+      port: ${REDIS_PORT:6379}
+
+springdoc:
+  api-docs:
+    path: /api-docs
