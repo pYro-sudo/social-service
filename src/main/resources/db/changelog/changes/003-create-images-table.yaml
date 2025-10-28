@@ -1,0 +1,71 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-1
+      author: losik
+      changes:
+        - createTable:
+            schemaName: gallery
+            tableName: images
+            columns:
+              - column:
+                  name: id
+                  type: serial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: url
+                  type: varchar(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(500)
+                  defaultValue: ""
+              - column:
+                  name: uploaded_at
+                  type: date
+                  defaultValueComputed: now()
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+#            tablespace: spring_microservice_course_ts
+
+#  - changeSet:
+#      id: 003-2
+#      author: losik
+#      changes:
+#        - addForeignKeyConstraint:
+#            baseTableSchemaName: gallery
+#            baseTableName: images
+#            baseColumnNames: user_id
+#            referencedTableSchemaName: user_schema
+#            referencedTableName: users
+#            referencedColumnNames: id
+#            constraintName: fk_images_users
+#            onDelete: CASCADE
+
+  - changeSet:
+      id: 003-3
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: gallery
+            tableName: images
+            indexName: idx_gallery_images_id
+            columns:
+              - column:
+                  name: id
+  - changeSet:
+      id: 003-4
+      author: losik
+      changes:
+        - createIndex:
+            schemaName: gallery
+            tableName: images
+            indexName: idx_gallery_images_uploaded_at
+            columns:
+              - column:
+                  name: uploaded_at

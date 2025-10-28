@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: spring_microservice_course_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - AWS_DEFAULT_REGION=us-east-1
+      - EDGE_PORT=4566
+      - DEBUG=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - app-network
+
+  image-service:
+    build: .
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_R2DBC_URL=${SPRING_R2DBC_URL}
+      - SPRING_R2DBC_USERNAME=${SPRING_R2DBC_USERNAME}
+      - SPRING_R2DBC_PASSWORD=${SPRING_R2DBC_PASSWORD}
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
+      - SPRING_CLOUD_AWS_S3_ENDPOINT=${SPRING_CLOUD_AWS_S3_ENDPOINT}
+      - SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=${SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY}
+      - SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=${SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY}
+      - SERVER_PORT=${SERVER_PORT}
+    depends_on:
+      - postgres
+      - redis
+      - localstack
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  localstack_data:
+
+networks:
+  app-network:
+    driver: bridge
