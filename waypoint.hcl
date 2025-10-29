@@ -7,14 +7,13 @@ app "quarkus-app" {
   }
 
   build {
-
     use "exec" {
       command = ["sh", "-c", <<EOT
         docker pull pyrodocker1/social-activity-service:latest #for now it is latest, since i didn't tag anything
         docker pull pyrodocker1/api-gateway:latest
         docker pull pyrodocker1/comment-like-service:latest
         docker pull pyrodocker1/image-service:latest
-        docker pull pyrodocker1/pyrodocker1/user-service:latest
+        docker pull pyrodocker1/user-service:latest
         docker pull postgres:15-alpine
         docker pull redis:7.2-alpine
         docker pull confluentinc/cp-kafka:7.8.0
@@ -86,7 +85,6 @@ app "quarkus-app" {
         kubectl apply -f ./k8s/front-k8s.yaml
 
         echo "Step 7: Applying ingress and availability policies..."
-        
         if ! kubectl get namespace ingress-nginx > /dev/null 2>&1; then
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
           kubectl wait --namespace ingress-nginx \
