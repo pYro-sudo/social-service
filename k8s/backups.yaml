@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: social-network-db
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: social-network-db
+spec:
+  schedule: "0 2 * * *"  # Ежедневно в 2:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: postgres-backup
+              image: postgres:15
+              env:
+                - name: POSTGRES_HOST
+                  value: "postgres"
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: username
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  # Создаем дамп
+                  pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER spring_microservice_course_db > /backup/postgres-backup-$(date +%Y%m%d-%H%M%S).sql
+                  
+                  # Удаляем старые бэкапы (оставляем последние 7)
+                  ls -tp /backup/postgres-backup-*.sql | grep -v '/$' | tail -n +8 | xargs -I {} rm -- {}
+                  
+                  echo "PostgreSQL backup completed"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: social-network-db
+spec:
+  schedule: "0 3 * * *"  # Ежедневно в 3:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: mongodb-backup
+              image: mongo:6.0
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  # Создаем дамп в архив
+                  mongodump --host=mongodb --db=activity_db --archive=/backup/mongodb-backup-$(date +%Y%m%d-%H%M%S).archive
+                  
+                  # Удаляем старые бэкапы (оставляем последние 7)
+                  ls -tp /backup/mongodb-backup-*.archive | grep -v '/$' | tail -n +8 | xargs -I {} rm -- {}
+                  
+                  echo "MongoDB backup completed"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: social-network-db
+spec:
+  schedule: "0 4 * * *"  # Ежедневно в 4:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: redis-backup
+              image: redis:7.2-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Сохраняем Redis данные
+                  redis-cli -h redis SAVE
+                  redis-cli -h redis --rdb /backup/redis-dump-$(date +%Y%m%d-%H%M%S).rdb
+                  
+                  # Удаляем старые бэкапы (оставляем последние 7)
+                  ls -tp /backup/redis-dump-*.rdb | grep -v '/$' | tail -n +8 | xargs -I {} rm -- {}
+                  
+                  echo "Redis backup completed"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: upload-backups-to-s3
+  namespace: social-network-db
+spec:
+  schedule: "0 5 * * *"  # Ежедневно в 5:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: aws-cli
+              image: amazon/aws-cli:latest
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: access-key
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: secret-key
+                - name: AWS_ENDPOINT_URL
+                  value: "http://localstack:4566"
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  # Создаем бакет если не существует
+                  aws s3 mb s3://social-network-backups --endpoint-url=$AWS_ENDPOINT_URL || true
+                  
+                  # Загружаем свежие бэкапы в S3
+                  find /backup -name "*.sql" -o -name "*.archive" -o -name "*.rdb" -mtime -1 | while read file; do
+                    aws s3 cp "$file" s3://social-network-backups/ --endpoint-url=$AWS_ENDPOINT_URL
+                  done
+                  
+                  echo "Backups uploaded to S3"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore-test
+  namespace: social-network-db
+spec:
+  template:
+    spec:
+      containers:
+        - name: postgres-restore
+          image: postgres:15
+          env:
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Находим последний бэкап
+              LATEST_BACKUP=$(ls -t /backup/postgres-backup-*.sql | head -1)
+              
+              if [ -f "$LATEST_BACKUP" ]; then
+                echo "Testing restore from: $LATEST_BACKUP"
+                # Создаем тестовую БД для проверки восстановления
+                createdb -h $POSTGRES_HOST -U $POSTGRES_USER test_restore_db
+                psql -h $POSTGRES_HOST -U $POSTGRES_USER -d test_restore_db -f "$LATEST_BACKUP"
+                echo "Restore test completed successfully"
+                # Удаляем тестовую БД
+                dropdb -h $POSTGRES_HOST -U $POSTGRES_USER test_restore_db
+              else
+                echo "No backup found for testing"
+                exit 1
+              fi
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+      restartPolicy: OnFailure
+      volumes:
+        - name: backup-storage
+          persistentVolumeClaim:
+            claimName: backup-pvc

@@ -1,0 +1,65 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-service-pdb
+  namespace: social-network-users
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: image-service-pdb
+  namespace: social-network-images
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: image-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: comment-like-service-pdb
+  namespace: social-network-comments
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: comment-like-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: activity-service-pdb
+  namespace: social-network-activities
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: activity-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: social-network-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+#---
+#apiVersion: policy/v1
+#kind: PodDisruptionBudget
+#metadata:
+#  name: frontend-pdb
+#  namespace: social-network-gateway
+#spec:
+#  minAvailable: 1
+#  selector:
+#    matchLabels:
+#      app: photo-sharing-frontend
