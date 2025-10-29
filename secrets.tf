@@ -54,7 +54,7 @@ resource "kubernetes_secret" "mongodb_credentials" {
   depends_on = [kubectl_manifest.namespaces]
 }
 
-resource "kubernetes_secret" "aws_credentials" {
+resource "kubernetes_secret" "s3_credentials" {
   metadata {
     name      = "aws-credentials"
     namespace = "social-network-db"

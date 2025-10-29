@@ -5,14 +5,17 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.23"
     }
+
     helm = {
       source  = "hashicorp/helm"
       version = "~> 2.11"
     }
+
     kubectl = {
       source  = "gavinbunney/kubectl"
       version = "~> 1.14"
     }
+
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -97,7 +100,7 @@ resource "kubectl_manifest" "kafka" {
 
 resource "kubectl_manifest" "localstack" {
   yaml_body = file("${path.module}/k8s/localstack-deployment.yaml")
-  depends_on = [kubectl_manifest.namespaces]
+  depends_on = [kubectl_manifest.namespaces, kubernetes_secret.s3_credentials]
 }
 
 resource "kubectl_manifest" "user_service" {
